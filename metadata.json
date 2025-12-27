@@ -1,0 +1,8 @@
+{
+  "name": "Downey Cleaning",
+  "description": "Comprehensive cleaning service management application with scheduling, time tracking, and automated reporting.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
