@@ -31,6 +31,15 @@
         -ms-overflow-style: none;
         scrollbar-width: none;
       }
+      /* Shake animation for errors */
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-5px); }
+        75% { transform: translateX(5px); }
+      }
+      .animate-shake {
+        animation: shake 0.2s ease-in-out 0s 2;
+      }
     </style>
 
 <link rel="stylesheet" href="/index.css">
@@ -52,7 +61,7 @@
   }
 }
 </script>
-  <script type="module" crossorigin src="./assets/index-Dgz-RVwz.js"></script>
+  <script type="module" crossorigin src="./assets/index--VUHBTfi.js"></script>
 </head>
   <body class="bg-gray-50 text-slate-800 antialiased">
     <div id="root"></div>
