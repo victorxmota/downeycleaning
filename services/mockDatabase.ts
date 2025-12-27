@@ -1,5 +1,4 @@
 import { User, UserRole, ScheduleItem, TimeRecord, Office } from '../types';
-import { FirebaseUser } from './firebase';
 
 // Initial Seed Data
 const INITIAL_USERS: User[] = [
@@ -75,29 +74,6 @@ export const MockDB = {
   getUserById: (id: string): User | undefined => {
     const users = MockDB.getUsers();
     return users.find(u => u.id === id);
-  },
-
-  // Novo método para integrar com Firebase
-  findOrCreateGoogleUser: (firebaseUser: FirebaseUser): User => {
-    const users = MockDB.getUsers();
-    let user = users.find(u => u.email === firebaseUser.email);
-
-    if (!user) {
-      // Cria um novo usuário funcionário se não existir
-      user = {
-        id: firebaseUser.uid, // Usa o ID do Firebase
-        name: firebaseUser.displayName || 'Google User',
-        email: firebaseUser.email || '',
-        role: UserRole.EMPLOYEE, // Padrão: Funcionário
-        pps: 'Update Profile',
-        phone: 'Update Profile',
-        // Sem senha pois é auth social
-      };
-      users.push(user);
-      localStorage.setItem(KEYS.USERS, JSON.stringify(users));
-    }
-    
-    return user;
   },
 
   getSchedules: (): ScheduleItem[] => {

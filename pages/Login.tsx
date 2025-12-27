@@ -1,4 +1,5 @@
 
+
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { signInWithGoogle, loginWithEmail, registerWithEmail } from '../services/firebase';
@@ -117,7 +118,7 @@ export const Login: React.FC = () => {
             <Input 
               label="Email Address" 
               type="email" 
-              placeholder="name@downeycleaning.ie" 
+              placeholder="name@company.com" 
               value={email} 
               onChange={(e) => setEmail(e.target.value)} 
               required

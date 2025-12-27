@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { UserRole } from './types';
-import { auth } from './services/firebase';
-import { AuthProvider, useAuth } from './context/AuthContext';
+import { User, UserRole } from './types';
+import { Database } from './services/database';
+import { auth, logoutFirebase } from './services/firebase';
+import { onAuthStateChanged } from 'firebase/auth';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Agenda } from './pages/Agenda';
@@ -11,6 +12,17 @@ import { CheckIn } from './pages/CheckIn';
 import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
 import { ShieldAlert } from 'lucide-react';
+
+interface AuthContextType {
+  user: User | null;
+  logout: () => void;
+  isAuthenticated: boolean;
+  isLoading: boolean;
+}
+
+const AuthContext = createContext<AuthContextType>(null!);
+
+export const useAuth = () => useContext(AuthContext);
 
 const ProtectedRoute = ({ children, allowedRoles }: { children?: React.ReactNode, allowedRoles?: UserRole[] }) => {
   const { isAuthenticated, user, isLoading } = useAuth();
@@ -36,6 +48,9 @@ const ProtectedRoute = ({ children, allowedRoles }: { children?: React.ReactNode
 };
 
 const App: React.FC = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
   if (!auth) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-8 bg-gray-50 text-center">
@@ -44,14 +59,43 @@ const App: React.FC = () => {
                 <ShieldAlert className="text-red-600 w-8 h-8" />
             </div>
             <h1 className="text-2xl font-bold text-gray-800 mb-2">Configuração Pendente</h1>
-            <p className="text-gray-600 mb-6">Erro na inicialização do Firebase.</p>
+            <p className="text-gray-600 mb-6">
+                O aplicativo não encontrou as chaves de API do Firebase.
+            </p>
+            <div className="text-left bg-slate-900 text-slate-50 p-4 rounded-lg text-sm overflow-x-auto font-mono mb-4">
+                <p className="opacity-50 mb-2">// Verifique seu arquivo .env</p>
+                <p>VITE_FIREBASE_API_KEY=...</p>
+            </div>
         </div>
       </div>
     );
   }
 
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth as any, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const appUser = await Database.syncUser(firebaseUser);
+          setUser(appUser);
+        } catch (error) {
+          console.error("Failed to sync user", error);
+        }
+      } else {
+        setUser(null);
+      }
+      setIsLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  const logout = async () => {
+    await logoutFirebase();
+    setUser(null);
+  };
+
   return (
-    <AuthProvider>
+    <AuthContext.Provider value={{ user, logout, isAuthenticated: !!user, isLoading }}>
       <HashRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
@@ -62,7 +106,7 @@ const App: React.FC = () => {
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </HashRouter>
-    </AuthProvider>
+    </AuthContext.Provider>
   );
 };
 
