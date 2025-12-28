@@ -1,5 +1,4 @@
 
-
 export enum UserRole {
   ADMIN = 'ADMIN',
   EMPLOYEE = 'EMPLOYEE',
@@ -93,6 +92,10 @@ export interface TimeRecord {
   startLocation?: GeoLocation;
   endLocation?: GeoLocation;
   notes?: string;
+  // Pause features
+  isPaused?: boolean;
+  pausedAt?: string;
+  totalPausedMs?: number;
 }
 
 export interface AuthState {

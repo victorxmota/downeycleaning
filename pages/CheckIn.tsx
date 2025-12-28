@@ -1,5 +1,4 @@
 
-
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
@@ -21,7 +20,9 @@ import {
   Box, 
   AlertTriangle,
   ChevronDown,
-  Edit2
+  Edit2,
+  PauseCircle,
+  Play
 } from 'lucide-react';
 
 const INITIAL_CHECKLIST: SafetyChecklist = {
@@ -115,8 +116,19 @@ export const CheckIn: React.FC = () => {
   useEffect(() => {
     if (activeSession) {
       const startTime = new Date(activeSession.startTime).getTime();
+      const totalPausedMs = activeSession.totalPausedMs || 0;
+      
       timerRef.current = window.setInterval(() => {
-        setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
+        let now = Date.now();
+        let currentEffectiveTime = now - startTime - totalPausedMs;
+
+        // If currently paused, we also subtract the time since the pause started
+        if (activeSession.isPaused && activeSession.pausedAt) {
+          const pausedAt = new Date(activeSession.pausedAt).getTime();
+          currentEffectiveTime -= (now - pausedAt);
+        }
+
+        setElapsedTime(Math.floor(currentEffectiveTime / 1000));
       }, 1000);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
@@ -169,7 +181,6 @@ export const CheckIn: React.FC = () => {
       return;
     }
 
-    // Opcional: Validar se ao menos alguns itens do checklist foram marcados
     const checkedCount = Object.values(checklist).filter(v => v === true).length;
     if (checkedCount < 5) {
       if (!confirm("You have very few items checked in the safety plan. Are you sure you want to proceed?")) return;
@@ -191,13 +202,26 @@ export const CheckIn: React.FC = () => {
 
         const newRecord = await Database.startShift(recordData, photoFile || undefined);
         setActiveSession(newRecord);
-        // Reset local previews
         setPhotoFile(null);
     } catch (error: any) {
         console.error("Failed to start shift:", error);
         alert(`Error: ${error.message || "Could not start shift. Check your connection."}`);
     } finally {
         setIsProcessing(false);
+    }
+  };
+
+  const handleTogglePause = async () => {
+    if (!activeSession) return;
+    setIsProcessing(true);
+    try {
+      const updatedSession = await Database.togglePause(activeSession);
+      setActiveSession(updatedSession);
+    } catch (error: any) {
+      console.error(error);
+      alert("Failed to update pause status.");
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -209,7 +233,8 @@ export const CheckIn: React.FC = () => {
       const location = await getCurrentLocation();
       await Database.endShift(activeSession.id, {
         endTime: new Date().toISOString(),
-        endLocation: location || undefined
+        endLocation: location || undefined,
+        isPaused: false // Ensure it's not paused on finish
       }, endPhotoFile || undefined);
       
       setActiveSession(null);
@@ -281,7 +306,7 @@ export const CheckIn: React.FC = () => {
           <p className="text-gray-500 text-sm italic mt-1">"Safety is our own responsibility. Take 20 seconds to be aware of hazards."</p>
         </div>
         {activeSession && (
-          <div className="bg-brand-900 text-white px-4 py-2 rounded-full font-mono font-bold animate-pulse">
+          <div className={`px-4 py-2 rounded-full font-mono font-bold transition-colors ${activeSession.isPaused ? 'bg-orange-500 text-white' : 'bg-brand-900 text-white animate-pulse'}`}>
             {formatTime(elapsedTime)}
           </div>
         )}
@@ -415,38 +440,51 @@ export const CheckIn: React.FC = () => {
         </div>
       )}
 
-      <div className={`p-8 rounded-xl text-center transition-all shadow-lg ${activeSession ? 'bg-brand-900 text-white' : 'bg-brand-100'}`}>
+      <div className={`p-8 rounded-xl text-center transition-all shadow-lg ${activeSession ? (activeSession.isPaused ? 'bg-orange-600 text-white' : 'bg-brand-900 text-white') : 'bg-brand-100'}`}>
         {activeSession ? (
           <div className="space-y-6">
-             <div className="animate-pulse">
-                <p className="text-brand-300 font-bold uppercase tracking-widest text-xs mb-1">Shift in Progress</p>
-                <div className="text-5xl font-mono font-bold tracking-tighter">{formatTime(elapsedTime)}</div>
-                <p className="text-brand-400 text-sm mt-2">{activeSession.locationName}</p>
+             <div className={activeSession.isPaused ? '' : 'animate-pulse'}>
+                <p className="text-white/70 font-bold uppercase tracking-widest text-[10px] mb-1">
+                  {activeSession.isPaused ? 'Shift Paused / On Break' : 'Shift in Progress'}
+                </p>
+                <div className={`text-5xl font-mono font-bold tracking-tighter ${activeSession.isPaused ? 'text-white' : 'text-white'}`}>{formatTime(elapsedTime)}</div>
+                <p className="text-white/60 text-sm mt-2 font-medium">{activeSession.locationName}</p>
              </div>
              
              <div className="bg-white/10 p-4 rounded-lg text-left border border-white/5">
-                <label className="block text-xs font-bold text-brand-200 mb-2 uppercase tracking-widest">End Photo (Optional)</label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-brand-700 border-dashed rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+                <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-widest">End Photo (Optional)</label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/20 border-dashed rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
                     {endPhotoPreview ? (
                       <img src={endPhotoPreview} alt="Preview" className="h-28 object-contain rounded shadow-sm" />
                     ) : (
-                      <Camera className="w-8 h-8 text-brand-400" />
+                      <Camera className="w-8 h-8 text-white/40" />
                     )}
                   </div>
                   <input type="file" className="hidden" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e, true)} />
                 </label>
              </div>
 
-             <Button 
-                onClick={handleEndShift} 
-                variant="danger" 
-                size="lg" 
-                className="w-full shadow-xl"
-                disabled={isProcessing}
-             >
-                 {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <StopCircle className="mr-2"/>} Complete Shift
-             </Button>
+             <div className="flex gap-4">
+                <Button 
+                    onClick={handleTogglePause} 
+                    variant="secondary"
+                    className={`flex-1 font-bold ${activeSession.isPaused ? 'bg-green-500 text-white border-none hover:bg-green-600' : 'bg-white text-orange-600 border-none'}`}
+                    disabled={isProcessing}
+                >
+                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : (activeSession.isPaused ? <Play size={20} className="mr-2"/> : <PauseCircle size={20} className="mr-2"/>)}
+                    {activeSession.isPaused ? 'Resume Work' : 'Pause / Break'}
+                </Button>
+
+                <Button 
+                    onClick={handleEndShift} 
+                    variant="danger" 
+                    className="flex-1 shadow-xl font-bold bg-red-500 hover:bg-red-600 border-none"
+                    disabled={isProcessing}
+                >
+                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <StopCircle size={20} className="mr-2"/>} Complete Shift
+                </Button>
+             </div>
           </div>
         ) : (
           <div className="space-y-4">

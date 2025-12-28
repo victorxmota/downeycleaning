@@ -1,14 +1,19 @@
 
-
 import React from 'react';
 
-interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
+export interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
   label?: string;
   error?: string;
   labelClassName?: string;
 }
 
-export const Input: React.FC<InputProps> = ({ label, error, className = '', labelClassName = '', ...props }) => {
+export const Input = React.forwardRef<HTMLInputElement, InputProps>(({ 
+  label, 
+  error, 
+  className = '', 
+  labelClassName = '', 
+  ...props 
+}, ref) => {
   const isDarkBg = 
     className.includes('bg-black') || 
     className.includes('bg-slate-900') || 
@@ -27,6 +32,7 @@ export const Input: React.FC<InputProps> = ({ label, error, className = '', labe
         </label>
       )}
       <input
+        ref={ref}
         className={`
           w-full rounded-md shadow-sm border p-2 transition-all
           focus:ring-2 focus:ring-brand-500 focus:border-brand-500
@@ -40,4 +46,6 @@ export const Input: React.FC<InputProps> = ({ label, error, className = '', labe
       {error && <p className="mt-1 text-sm text-red-600 font-medium">{error}</p>}
     </div>
   );
-};
+});
+
+Input.displayName = 'Input';

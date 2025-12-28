@@ -126,11 +126,41 @@ export const Database = {
     
     const finalData = sanitizeData({
       ...record,
-      photoUrl
+      photoUrl,
+      isPaused: false,
+      totalPausedMs: 0
     });
 
     const docRef = await addDoc(collection(db, RECORDS_COL), finalData);
     return { ...finalData, id: docRef.id };
+  },
+
+  togglePause: async (record: TimeRecord): Promise<TimeRecord> => {
+    const docRef = doc(db, RECORDS_COL, record.id);
+    const now = new Date().toISOString();
+    let updates: Partial<TimeRecord> = {};
+
+    if (record.isPaused) {
+      // Resume: Calculate how long we were paused and add to total
+      const pausedAt = new Date(record.pausedAt!).getTime();
+      const currentPauseDuration = Date.now() - pausedAt;
+      const totalPausedMs = (record.totalPausedMs || 0) + currentPauseDuration;
+      
+      updates = {
+        isPaused: false,
+        pausedAt: undefined,
+        totalPausedMs: totalPausedMs
+      };
+    } else {
+      // Pause: Mark the current time
+      updates = {
+        isPaused: true,
+        pausedAt: now
+      };
+    }
+
+    await updateDoc(docRef, sanitizeData(updates));
+    return { ...record, ...updates };
   },
 
   endShift: async (recordId: string, updates: Partial<TimeRecord>, photoFile?: File) => {
