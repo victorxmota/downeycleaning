@@ -11,6 +11,7 @@ import { Agenda } from './pages/Agenda';
 import { CheckIn } from './pages/CheckIn';
 import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
+import { Users } from './pages/Users';
 import { ShieldAlert } from 'lucide-react';
 
 interface AuthContextType {
@@ -62,10 +63,6 @@ const App: React.FC = () => {
             <p className="text-gray-600 mb-6">
                 O aplicativo não encontrou as chaves de API do Firebase.
             </p>
-            <div className="text-left bg-slate-900 text-slate-50 p-4 rounded-lg text-sm overflow-x-auto font-mono mb-4">
-                <p className="opacity-50 mb-2">// Verifique seu arquivo .env</p>
-                <p>VITE_FIREBASE_API_KEY=...</p>
-            </div>
         </div>
       </div>
     );
@@ -102,6 +99,7 @@ const App: React.FC = () => {
           <Route path="/" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
           <Route path="/check-in" element={<ProtectedRoute allowedRoles={[UserRole.EMPLOYEE]}><CheckIn /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
+          <Route path="/users" element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]}><Users /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
