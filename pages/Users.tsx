@@ -14,7 +14,6 @@ export const Users: React.FC = () => {
   const [isAdding, setIsAdding] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   
-  // Form state for new/edit user
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -77,7 +76,6 @@ export const Users: React.FC = () => {
 
     try {
       if (editingUser) {
-        // Update logic - All fields editable
         await Database.updateUser(editingUser.id, {
           name: formData.name,
           email: formData.email,
@@ -85,11 +83,10 @@ export const Users: React.FC = () => {
           pps: formData.pps,
           role: formData.role
         });
-        alert('User profile updated in records successfully!');
+        alert('User updated successfully in the database.');
         setIsAdding(false);
         loadUsers();
       } else {
-        // Create logic
         const firebaseUser = await registerWithEmail(formData.email, formData.password);
         await Database.syncUser(firebaseUser, {
           name: formData.name,
@@ -114,7 +111,7 @@ export const Users: React.FC = () => {
     
     try {
       await Database.deleteUser(user.id);
-      alert('User deleted from records.');
+      alert('User removed from database.');
       loadUsers();
     } catch (err) {
       console.error(err);
@@ -134,9 +131,9 @@ export const Users: React.FC = () => {
         <div>
           <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
             <UsersIcon className="text-brand-600" />
-            User Management
+            Personnel Management
           </h2>
-          <p className="text-sm text-gray-500">Register and monitor all system personnel</p>
+          <p className="text-sm text-gray-500">Full control over employee records</p>
         </div>
         <Button onClick={handleOpenAdd}>
           <UserPlus size={18} className="mr-2" /> New Employee
@@ -183,8 +180,8 @@ export const Users: React.FC = () => {
                 {editingUser && (
                    <div className="flex flex-col">
                       <label className="text-xs font-bold text-gray-400 uppercase mb-1">Password</label>
-                      <div className="p-2 bg-gray-50 rounded border text-xs text-gray-500 italic">
-                        Managed by user profile
+                      <div className="p-2 bg-gray-50 rounded border text-[10px] text-gray-500 italic">
+                        Login credentials can only be reset by the user in their profile.
                       </div>
                    </div>
                 )}
@@ -246,13 +243,12 @@ export const Users: React.FC = () => {
                 <th className="p-4">Employee</th>
                 <th className="p-4">Account ID</th>
                 <th className="p-4">Role</th>
-                <th className="p-4">PPS</th>
                 <th className="p-4 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {isLoading ? (
-                <tr><td colSpan={5} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-brand-600" /></td></tr>
+                <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-brand-600" /></td></tr>
               ) : filteredUsers.map(user => (
                 <tr key={user.id} className="hover:bg-brand-50/20 transition-colors">
                   <td className="p-4">
@@ -274,15 +270,12 @@ export const Users: React.FC = () => {
                       <Shield size={10} /> {user.role}
                     </span>
                   </td>
-                  <td className="p-4 font-mono text-xs text-gray-500">
-                    {user.pps || '-'}
-                  </td>
                   <td className="p-4">
                     <div className="flex justify-center gap-2">
                       <button 
                         onClick={() => handleOpenEdit(user)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit User"
+                        title="Edit Record"
                       >
                         <Edit size={16} />
                       </button>
@@ -298,7 +291,7 @@ export const Users: React.FC = () => {
                 </tr>
               ))}
               {!isLoading && filteredUsers.length === 0 && (
-                <tr><td colSpan={5} className="p-10 text-center text-gray-400 italic">No users found.</td></tr>
+                <tr><td colSpan={4} className="p-10 text-center text-gray-400 italic">No users found.</td></tr>
               )}
             </tbody>
           </table>

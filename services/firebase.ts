@@ -1,15 +1,19 @@
 
-import { initializeApp } from "firebase/app";
+import { initializeApp, FirebaseApp } from "firebase/app";
 import { 
   getAuth, 
+  Auth,
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut,
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  updateEmail as updateAuthEmail,
+  updatePassword as updateAuthPassword,
+  User as FirebaseUserInstance
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { getFirestore, Firestore } from "firebase/firestore";
+import { getStorage, FirebaseStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyCs1NAMdvtuiWzbYMohY0aZa2AiS9z8uNw",
@@ -21,24 +25,14 @@ const firebaseConfig = {
   measurementId: "G-MMZD70R02H"
 };
 
-let app;
-let auth: any;
-let db: any;
-let storage: any;
-
-try {
-  app = initializeApp(firebaseConfig);
-  auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
-} catch (error) {
-  console.error("Erro ao inicializar serviços do Firebase:", error);
-}
+const app: FirebaseApp = initializeApp(firebaseConfig);
+const auth: Auth = getAuth(app);
+const db: Firestore = getFirestore(app);
+const storage: FirebaseStorage = getStorage(app);
 
 const googleProvider = new GoogleAuthProvider();
 
 export const signInWithGoogle = async () => {
-  if (!auth) throw new Error("Auth service not initialized");
   try {
     const result = await signInWithPopup(auth, googleProvider);
     return result.user;
@@ -49,19 +43,26 @@ export const signInWithGoogle = async () => {
 };
 
 export const loginWithEmail = async (email: string, pass: string) => {
-  if (!auth) throw new Error("Auth service not initialized");
   const result = await signInWithEmailAndPassword(auth, email, pass);
   return result.user;
 };
 
 export const registerWithEmail = async (email: string, pass: string) => {
-  if (!auth) throw new Error("Auth service not initialized");
   const result = await createUserWithEmailAndPassword(auth, email, pass);
   return result.user;
 };
 
+export const updateUserAuthEmail = async (newEmail: string) => {
+  if (!auth.currentUser) throw new Error("No user logged in");
+  await updateAuthEmail(auth.currentUser, newEmail);
+};
+
+export const updateUserAuthPassword = async (newPassword: string) => {
+  if (!auth.currentUser) throw new Error("No user logged in");
+  await updateAuthPassword(auth.currentUser, newPassword);
+};
+
 export const logoutFirebase = async () => {
-  if (!auth) return;
   try {
     await signOut(auth);
   } catch (error) {
@@ -70,4 +71,4 @@ export const logoutFirebase = async () => {
 };
 
 export { auth, db, storage };
-export type FirebaseUser = any;
+export type FirebaseUser = FirebaseUserInstance;

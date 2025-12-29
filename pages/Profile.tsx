@@ -15,7 +15,6 @@ export const Profile: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  // Profile Form
   const [profileData, setProfileData] = useState({
     name: user?.name || '',
     email: user?.email || '',
@@ -23,7 +22,6 @@ export const Profile: React.FC = () => {
     pps: user?.pps || ''
   });
 
-  // Password Form
   const [passData, setPassData] = useState({
     newPass: '',
     confirmPass: ''
@@ -35,12 +33,10 @@ export const Profile: React.FC = () => {
     setIsLoading(true);
     setError('');
     try {
-      // Update Auth Email if changed
       if (profileData.email !== user.email) {
         await updateUserAuthEmail(profileData.email);
       }
       
-      // Update Firestore
       await Database.updateUser(user.id, {
         name: profileData.name,
         email: profileData.email,
@@ -50,9 +46,9 @@ export const Profile: React.FC = () => {
       
       alert('Profile updated successfully!');
       setIsEditing(false);
-      window.location.reload(); // Refresh to sync auth state
+      window.location.reload();
     } catch (err: any) {
-      setError(err.message || 'Error updating profile');
+      setError(err.message || 'Error updating profile. Email changes may require a recent login.');
     } finally {
       setIsLoading(false);
     }
