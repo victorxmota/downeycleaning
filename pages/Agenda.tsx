@@ -2,22 +2,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
-import { ScheduleItem, UserRole, User, Office, OfficeScheduleConfig } from '../types';
+import { ScheduleItem, UserRole, User, Office } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Trash2, Calendar, Clock, MapPin, Building2, Save, X, CheckSquare, Square, Loader2, Edit2, Check } from 'lucide-react';
+import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2 } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
 export const Agenda: React.FC = () => {
   const { user } = useAuth();
+  const [viewMode, setViewMode] = useState<'agenda' | 'offices'>('agenda');
   const [schedules, setSchedules] = useState<ScheduleItem[]>([]);
   const [offices, setOffices] = useState<Office[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>(user?.id || '');
   const [isLoading, setIsLoading] = useState(false);
   
-  const [viewMode, setViewMode] = useState<'schedule' | 'offices'>('schedule');
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingOffice, setIsAddingOffice] = useState(false);
 
@@ -25,38 +25,37 @@ export const Agenda: React.FC = () => {
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editHoursValue, setEditHoursValue] = useState<number>(0);
 
-  const [newSchedule, setNewSchedule] = useState<Partial<ScheduleItem>>({
-    hoursPerDay: 4
-  });
-  const [selectedDays, setSelectedDays] = useState<number[]>([]);
-
-  const [newOffice, setNewOffice] = useState<{
-    name: string;
-    eircode: string;
-    address: string;
-    configs: OfficeScheduleConfig[];
-  }>({
+  // New Office form state
+  const [newOffice, setNewOffice] = useState<Partial<Office>>({
     name: '',
     eircode: '',
-    address: '',
-    configs: DAYS.map((_, index) => ({ dayOfWeek: index, hours: 0, isActive: false }))
+    address: ''
   });
+
+  const [newSchedule, setNewSchedule] = useState<Partial<ScheduleItem>>({
+    hoursPerDay: 4,
+    locationName: '',
+    address: ''
+  });
+  const [selectedDays, setSelectedDays] = useState<number[]>([]);
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
   useEffect(() => {
     const initData = async () => {
       setIsLoading(true);
-      if (isAdmin) {
-        const allUsers = await Database.getAllUsers();
-        setUsers(allUsers.filter((u: User) => u.role === UserRole.EMPLOYEE));
+      try {
+        if (isAdmin) {
+          const allUsers = await Database.getAllUsers();
+          setUsers(allUsers.filter((u: User) => u.role === UserRole.EMPLOYEE));
+        }
         const allOffices = await Database.getOffices();
         setOffices(allOffices);
-      } else {
-        const allOffices = await Database.getOffices();
-        setOffices(allOffices);
+      } catch (e) {
+        console.error("Error initializing agenda data:", e);
+      } finally {
+        setIsLoading(false);
       }
-      setIsLoading(false);
     };
     initData();
   }, [isAdmin]);
@@ -64,8 +63,11 @@ export const Agenda: React.FC = () => {
   useEffect(() => {
     if (selectedUser) {
       loadSchedules(selectedUser);
+    } else if (user) {
+      setSelectedUser(user.id);
+      loadSchedules(user.id);
     }
-  }, [selectedUser]);
+  }, [selectedUser, user]);
 
   const loadSchedules = async (userId: string) => {
     setIsLoading(true);
@@ -76,11 +78,6 @@ export const Agenda: React.FC = () => {
       console.error(e);
     }
     setIsLoading(false);
-  };
-
-  const loadOffices = async () => {
-    const data = await Database.getOffices();
-    setOffices(data);
   };
 
   const calculateWeeklyHours = () => {
@@ -106,25 +103,69 @@ export const Agenda: React.FC = () => {
     }
 
     const targetUserId = isAdmin ? selectedUser : user?.id;
-    if (!targetUserId) return;
-
-    setIsLoading(true);
-    for (const dayIndex of selectedDays) {
-      const item: any = {
-        userId: targetUserId,
-        locationName: newSchedule.locationName!,
-        address: newSchedule.address!,
-        dayOfWeek: dayIndex,
-        hoursPerDay: Number(newSchedule.hoursPerDay)
-      };
-      await Database.addSchedule(item);
+    if (!targetUserId) {
+      alert("Target user not identified.");
+      return;
     }
 
-    await loadSchedules(targetUserId);
-    setIsAddingSchedule(false);
-    setNewSchedule({ hoursPerDay: 4, locationName: '', address: '' });
-    setSelectedDays([]);
-    setIsLoading(false);
+    setIsLoading(true);
+    try {
+      for (const dayIndex of selectedDays) {
+        const item: any = {
+          userId: targetUserId,
+          locationName: newSchedule.locationName!,
+          address: newSchedule.address!,
+          dayOfWeek: dayIndex,
+          hoursPerDay: Number(newSchedule.hoursPerDay)
+        };
+        await Database.addSchedule(item);
+      }
+
+      await loadSchedules(targetUserId);
+      setIsAddingSchedule(false);
+      setNewSchedule({ hoursPerDay: 4, locationName: '', address: '' });
+      setSelectedDays([]);
+    } catch (e) {
+      console.error(e);
+      alert("Error adding schedule.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleAddOffice = async () => {
+    if (!newOffice.name || !newOffice.address) {
+      alert("Name and Address are required");
+      return;
+    }
+    setIsLoading(true);
+    try {
+      await Database.addOffice({
+        name: newOffice.name!,
+        eircode: newOffice.eircode || '',
+        address: newOffice.address!,
+        defaultSchedule: []
+      });
+      const allOffices = await Database.getOffices();
+      setOffices(allOffices);
+      setIsAddingOffice(false);
+      setNewOffice({ name: '', eircode: '', address: '' });
+    } catch (e) {
+      console.error(e);
+      alert("Error adding office.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleDeleteOffice = async (id: string) => {
+    if (window.confirm('Delete this site location?')) {
+      setIsLoading(true);
+      await Database.deleteOffice(id);
+      const allOffices = await Database.getOffices();
+      setOffices(allOffices);
+      setIsLoading(false);
+    }
   };
 
   const handleUpdateHours = async (id: string) => {
@@ -157,54 +198,6 @@ export const Agenda: React.FC = () => {
     setEditHoursValue(schedule.hoursPerDay);
   };
 
-  const handleOfficeConfigChange = (dayIndex: number, field: 'isActive' | 'hours', value: any) => {
-    const updatedConfigs = [...newOffice.configs];
-    if (field === 'isActive') {
-      updatedConfigs[dayIndex].isActive = value;
-      if (value && updatedConfigs[dayIndex].hours === 0) {
-        updatedConfigs[dayIndex].hours = 2;
-      }
-    } else {
-      updatedConfigs[dayIndex].hours = Number(value);
-    }
-    setNewOffice({ ...newOffice, configs: updatedConfigs });
-  };
-
-  const handleRegisterOffice = async () => {
-    if (!newOffice.name || !newOffice.address) {
-      alert("Name and Address are required.");
-      return;
-    }
-
-    setIsLoading(true);
-    const office: any = {
-      name: newOffice.name,
-      eircode: newOffice.eircode,
-      address: newOffice.address,
-      defaultSchedule: newOffice.configs.filter(c => c.isActive)
-    };
-
-    await Database.addOffice(office);
-    await loadOffices();
-    setIsAddingOffice(false);
-    setNewOffice({
-      name: '',
-      eircode: '',
-      address: '',
-      configs: DAYS.map((_, index) => ({ dayOfWeek: index, hours: 0, isActive: false }))
-    });
-    setIsLoading(false);
-  };
-
-  const handleDeleteOffice = async (id: string) => {
-    if (window.confirm('Are you sure you want to delete this office?')) {
-      setIsLoading(true);
-      await Database.deleteOffice(id);
-      await loadOffices();
-      setIsLoading(false);
-    }
-  };
-
   const handleOfficeSelectForSchedule = (officeId: string) => {
     const office = offices.find(o => o.id === officeId);
     if (office) {
@@ -216,7 +209,7 @@ export const Agenda: React.FC = () => {
     }
   };
 
-  if (isLoading && schedules.length === 0 && offices.length === 0) {
+  if (isLoading && schedules.length === 0 && viewMode === 'agenda') {
       return (
         <div className="flex justify-center p-8">
             <Loader2 className="animate-spin text-brand-500" size={32} />
@@ -228,229 +221,133 @@ export const Agenda: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">
-            {viewMode === 'schedule' ? 'Work Schedule' : 'Location Management'}
-          </h2>
-          <p className="text-gray-500">
-            {viewMode === 'schedule' ? 'Plan and assign work shifts' : 'Manage registered service locations'}
-          </p>
+          <h2 className="text-2xl font-bold text-gray-800">{viewMode === 'agenda' ? 'Work Schedule' : 'Manage Locations'}</h2>
+          <p className="text-gray-500">{viewMode === 'agenda' ? 'Plan and manage operational cleaning shifts' : 'Configure official service sites'}</p>
         </div>
         
-        <div className="flex flex-wrap gap-2">
-            {viewMode === 'schedule' ? (
-               <>
-                {isAdmin && (
-                  <select 
-                    className="border rounded-md px-3 py-2 bg-white"
-                    value={selectedUser}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
-                  >
-                    {users.map(u => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                  </select>
-                )}
-                <Button onClick={() => setIsAddingSchedule(!isAddingSchedule)}>
-                  {isAddingSchedule ? 'Cancel' : 'Add Shift'}
+        <div className="flex flex-wrap gap-2 items-center">
+            {isAdmin && (
+              <>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setViewMode(viewMode === 'agenda' ? 'offices' : 'agenda')}
+                  className="rounded-xl font-bold border-brand-600 text-brand-600"
+                >
+                  {viewMode === 'agenda' ? <Building2 size={18} className="mr-2" /> : <Calendar size={18} className="mr-2" />}
+                  {viewMode === 'agenda' ? 'Manage Sites' : 'View Schedule'}
                 </Button>
+                {viewMode === 'agenda' && (
+                  <div className="flex flex-col mr-2">
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Employee View</span>
+                    <select 
+                      className="border rounded-xl px-3 py-2 bg-white text-sm font-bold border-gray-200 outline-none focus:ring-2 focus:ring-brand-500"
+                      value={selectedUser}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
+                    >
+                      <option value={user?.id}>My Own Agenda</option>
+                      {users.map(u => (
+                        <option key={u.id} value={u.id}>{u.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 
-                {isAdmin && (
-                  <Button variant="secondary" onClick={() => setViewMode('offices')}>
-                    <Building2 size={18} className="mr-2" />
-                    Manage Locations
+                {viewMode === 'agenda' ? (
+                  <Button 
+                    onClick={() => setIsAddingSchedule(!isAddingSchedule)}
+                    className={`${isAddingSchedule ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
+                  >
+                    {isAddingSchedule ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
+                    {isAddingSchedule ? 'Cancel' : 'Add Shift'}
+                  </Button>
+                ) : (
+                  <Button 
+                    onClick={() => setIsAddingOffice(!isAddingOffice)}
+                    className={`${isAddingOffice ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
+                  >
+                    {isAddingOffice ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
+                    {isAddingOffice ? 'Cancel' : 'New Site'}
                   </Button>
                 )}
-               </>
-            ) : (
-               <>
-                <Button onClick={() => setIsAddingOffice(!isAddingOffice)}>
-                   {isAddingOffice ? 'Cancel' : 'Register Location'}
-                </Button>
-                <Button variant="secondary" onClick={() => setViewMode('schedule')}>
-                  <Calendar size={18} className="mr-2" />
-                  Back to Schedule
-                </Button>
-               </>
+              </>
             )}
         </div>
       </header>
 
-      {viewMode === 'offices' && isAdmin && (
-        <div className="space-y-6 animate-fade-in">
-          {isAddingOffice && (
-             <div className="bg-white p-6 rounded-xl shadow-lg border border-brand-200">
-                <div className="flex justify-between items-center mb-4">
-                  <h3 className="text-lg font-bold text-gray-800">Register New Location</h3>
-                  <button onClick={() => setIsAddingOffice(false)} className="text-gray-400 hover:text-gray-600">
-                    <X size={24} />
-                  </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  <Input 
-                    label="Location Name" 
-                    placeholder="e.g. Head Office"
-                    value={newOffice.name}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOffice({...newOffice, name: e.target.value})}
-                  />
-                  <Input 
-                    label="Eircode / Zip" 
-                    placeholder="A65 F292"
-                    value={newOffice.eircode}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOffice({...newOffice, eircode: e.target.value})}
-                  />
-                  <Input 
-                    label="Address" 
-                    placeholder="Full address"
-                    value={newOffice.address}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOffice({...newOffice, address: e.target.value})}
-                  />
-                </div>
-
-                <div className="border-t pt-4">
-                   <h4 className="font-medium text-gray-700 mb-3">Operating Days & Target Hours</h4>
-                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {newOffice.configs.map((config, index) => (
-                        <div key={index} className={`p-3 rounded-lg border ${config.isActive ? 'bg-brand-50 border-brand-300' : 'bg-gray-50 border-gray-200'}`}>
-                          <label className="flex items-center space-x-2 cursor-pointer mb-2">
-                            <input 
-                              type="checkbox" 
-                              className="w-4 h-4"
-                              checked={config.isActive}
-                              onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOfficeConfigChange(index, 'isActive', e.target.checked)}
-                            />
-                            <span className={`font-medium ${config.isActive ? 'text-brand-800' : 'text-gray-500'}`}>{DAYS[index]}</span>
-                          </label>
-                          {config.isActive && (
-                            <div className="flex items-center gap-2">
-                               <Clock size={16} className="text-brand-500" />
-                               <input 
-                                  type="number" 
-                                  min="0.5" 
-                                  step="0.5"
-                                  className="w-full p-1 text-sm border rounded"
-                                  value={config.hours}
-                                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleOfficeConfigChange(index, 'hours', e.target.value)}
-                                />
-                                <span className="text-xs text-gray-400">h</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
-                   </div>
-                </div>
-
-                <div className="mt-6 flex justify-end">
-                   <Button onClick={handleRegisterOffice} disabled={isLoading}>
-                     {isLoading ? <Loader2 className="animate-spin mr-2"/> : <Save size={18} className="mr-2" />}
-                     Save Location
-                   </Button>
-                </div>
-             </div>
-          )}
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {offices.map((office) => (
-              <div key={office.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative group hover:border-brand-300 transition-all">
-                <button 
-                  onClick={() => handleDeleteOffice(office.id)}
-                  className="absolute top-4 right-4 text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                >
-                  <Trash2 size={18} />
-                </button>
-                <div className="flex items-start space-x-3 mb-4">
-                   <div className="bg-brand-100 p-2 rounded-lg text-brand-600"><Building2 size={24} /></div>
-                   <div>
-                      <h3 className="font-bold text-gray-900">{office.name}</h3>
-                      <p className="text-xs text-brand-600 font-mono font-bold uppercase">{office.eircode}</p>
-                   </div>
-                </div>
-                <div className="text-sm text-gray-600 mb-4 flex items-start gap-2">
-                   <MapPin size={16} className="mt-0.5 text-gray-400" />
-                   {office.address}
-                </div>
-              </div>
-            ))}
-            {offices.length === 0 && !isAddingOffice && (
-              <div className="col-span-full py-12 text-center text-gray-400 border-2 border-dashed rounded-xl">
-                No locations registered yet.
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {viewMode === 'schedule' && (
+      {viewMode === 'agenda' ? (
         <>
-          <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 flex items-center justify-between">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-between">
             <div>
-              <h3 className="text-lg font-medium text-gray-900">Total Weekly Hours</h3>
-              <p className="text-xs text-gray-500 uppercase font-bold tracking-wider">Accumulated Forecast</p>
+              <h3 className="text-lg font-bold text-gray-900">Total Weekly Hours</h3>
+              <p className="text-[10px] text-gray-400 uppercase font-black tracking-widest">Accumulated Forecast</p>
             </div>
-            <div className="text-4xl font-black text-brand-500 tracking-tighter">{calculateWeeklyHours()}h</div>
+            <div className="text-4xl font-black text-brand-600 tracking-tighter">{calculateWeeklyHours()}h</div>
           </div>
 
-          {isAddingSchedule && (
-            <div className="bg-slate-900 p-6 rounded-xl border border-slate-700 space-y-4 animate-fade-in text-white shadow-2xl">
-              <div className="flex justify-between items-center border-b border-slate-700 pb-4">
-                 <h3 className="font-bold text-xl">{isAdmin ? 'Assign New Shift' : 'Add My Shift'}</h3>
+          {isAddingSchedule && isAdmin && (
+            <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 space-y-4 animate-fade-in text-white shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-5">
+                <Calendar size={120} />
+              </div>
+              
+              <div className="flex justify-between items-center border-b border-slate-700 pb-4 relative z-10">
+                 <h3 className="font-black text-xl tracking-tight uppercase">Assign New Shift</h3>
                  <button onClick={() => setIsAddingSchedule(false)} className="text-slate-400 hover:text-white transition-colors"><X size={24}/></button>
               </div>
               
-              {offices.length > 0 && (
-                <div>
-                   <label className="block text-sm font-medium text-white mb-1">Quick Select Location</label>
-                   <select 
-                      className="w-full rounded-md border-slate-600 bg-slate-800 text-white p-2.5 focus:ring-brand-500 focus:border-brand-500 font-bold"
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleOfficeSelectForSchedule(e.target.value)}
-                   >
-                     <option value="">-- Manual Entry or Select Office --</option>
-                     {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                   </select>
-                </div>
-              )}
-
-              {isAdmin && (
-                <div>
-                  <label className="block text-sm font-medium text-white mb-1">Assign To Employee</label>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                <div className="md:col-span-2">
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Assign To Employee</label>
                   <select 
-                    className="w-full rounded-md border-slate-600 bg-slate-800 text-white p-2.5 focus:ring-brand-500 focus:border-brand-500 font-bold"
+                    className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                     value={selectedUser}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
                   >
+                    <option value={user?.id}>Assign to myself</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
                 </div>
-              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {offices.length > 0 && (
+                  <div className="md:col-span-2">
+                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Quick Select Location</label>
+                     <select 
+                        className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
+                        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleOfficeSelectForSchedule(e.target.value)}
+                     >
+                       <option value="">-- Select Registered Site --</option>
+                       {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                     </select>
+                  </div>
+                )}
+
                 <Input 
-                  label="Display Name" 
-                  placeholder="e.g. Tech Corp"
-                  labelClassName="text-white font-bold"
+                  label="Site Name" 
+                  placeholder="e.g. Downey Tech Hub"
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
                   value={newSchedule.locationName || ''} 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, locationName: e.target.value})} 
-                  className="bg-slate-800 border-slate-600 placeholder:text-slate-400 font-bold" 
+                  className="bg-slate-800 border-slate-700 placeholder:text-slate-500 font-bold rounded-xl" 
                 />
                 <Input 
                   label="Address Detail" 
-                  placeholder="123 Street Ave"
-                  labelClassName="text-white font-bold"
+                  placeholder="123 Street Ave, D02"
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
                   value={newSchedule.address || ''} 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, address: e.target.value})} 
-                  className="bg-slate-800 border-slate-600 placeholder:text-slate-400 font-bold" 
+                  className="bg-slate-800 border-slate-700 placeholder:text-slate-500 font-bold rounded-xl" 
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white mb-2 font-bold">Days of Week (Multiple selection)</label>
+              <div className="relative z-10">
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Days of Week (Multiple selection)</label>
                 <div className="flex flex-wrap gap-2">
                    {DAYS.map((day, idx) => (
                      <button
                        key={idx}
                        type="button"
                        onClick={() => toggleScheduleDay(idx)}
-                       className={`flex items-center space-x-2 px-3 py-2 rounded-md border text-xs font-bold transition-all ${selectedDays.includes(idx) ? 'bg-brand-500 border-brand-500 text-white shadow-inner' : 'bg-slate-800 border-slate-700 text-slate-300 hover:border-slate-500'}`}
+                       className={`flex items-center space-x-2 px-4 py-2.5 rounded-xl border text-[10px] font-black transition-all ${selectedDays.includes(idx) ? 'bg-brand-500 border-brand-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-400 hover:border-slate-500'}`}
                      >
                        {selectedDays.includes(idx) ? <CheckSquare size={14} /> : <Square size={14} />}
                        <span>{day.substring(0, 3).toUpperCase()}</span>
@@ -459,100 +356,157 @@ export const Agenda: React.FC = () => {
                 </div>
               </div>
 
-              <div className="w-1/3">
+              <div className="w-1/3 relative z-10">
                 <Input 
-                  label="Duration (Hours)" 
+                  label="Shift Duration (Hours)" 
                   type="number" 
-                  min="1" 
-                  labelClassName="text-white font-bold"
+                  min="0.5" 
+                  step="0.5"
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
                   value={newSchedule.hoursPerDay} 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, hoursPerDay: Number(e.target.value)})} 
-                  className="bg-slate-800 border-slate-600 font-bold text-white" 
+                  className="bg-slate-800 border-slate-700 font-bold text-white rounded-xl" 
                 />
               </div>
 
-              <Button onClick={handleAddSchedule} fullWidth disabled={isLoading} size="lg">
-                {isLoading ? <Loader2 className="animate-spin mr-2"/> : <Save size={20} className="mr-2"/>} Confirm Shift Assignment
+              <Button 
+                onClick={handleAddSchedule} 
+                fullWidth 
+                disabled={isLoading} 
+                className="rounded-xl h-14 text-lg font-black shadow-xl relative z-10"
+              >
+                {isLoading ? <Loader2 className="animate-spin mr-2"/> : <Save size={20} className="mr-2"/>} 
+                CONFIRM SHIFT
               </Button>
             </div>
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {schedules.sort((a, b) => a.dayOfWeek - b.dayOfWeek).map((schedule) => (
-              <div key={schedule.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative group hover:shadow-md transition-shadow">
-                {(isAdmin || user?.id === schedule.userId) && (
+              <div key={schedule.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 relative group hover:shadow-md transition-all border-b-4 border-b-brand-100">
+                {isAdmin && (
                   <div className="absolute top-4 right-4 flex gap-2">
                     {editingScheduleId !== schedule.id && (
                       <button 
                         onClick={() => startEditing(schedule)} 
-                        className="text-gray-300 hover:text-brand-500 transition-colors"
+                        className="text-gray-300 hover:text-brand-600 transition-colors p-1"
                         title="Edit Hours"
                       >
                         <Edit2 size={16} />
                       </button>
                     )}
-                    <button onClick={() => handleDeleteSchedule(schedule.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                    <button onClick={() => handleDeleteSchedule(schedule.id)} className="text-gray-300 hover:text-red-500 transition-colors p-1">
                       <Trash2 size={18} />
                     </button>
                   </div>
                 )}
-                <div className="flex items-center space-x-2 mb-3 text-brand-500">
-                  <Calendar size={18} />
-                  <span className="font-bold text-lg">{DAYS[schedule.dayOfWeek]}</span>
+                <div className="flex items-center space-x-2 mb-4">
+                  <div className="bg-brand-50 p-2 rounded-lg text-brand-600">
+                    <Calendar size={18} />
+                  </div>
+                  <span className="font-black text-gray-900 uppercase text-xs tracking-widest">{DAYS[schedule.dayOfWeek]}</span>
                 </div>
-                <div className="space-y-3 text-gray-600 border-t pt-3">
-                  <div className="flex items-start space-x-2">
-                    <MapPin size={18} className="mt-1 flex-shrink-0 text-brand-500" />
+                <div className="space-y-4 text-gray-600">
+                  <div className="flex items-start space-x-3">
+                    <MapPin size={18} className="mt-1 flex-shrink-0 text-brand-400" />
                     <div>
-                      <p className="font-bold text-gray-900 leading-tight">{schedule.locationName}</p>
-                      <p className="text-xs text-gray-500">{schedule.address}</p>
+                      <p className="font-black text-gray-900 tracking-tight leading-tight">{schedule.locationName}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">{schedule.address}</p>
                     </div>
                   </div>
                   
                   {editingScheduleId === schedule.id ? (
-                    <div className="flex items-center gap-2 bg-brand-50 p-2 rounded-lg border border-brand-200 animate-fade-in">
+                    <div className="flex items-center gap-2 bg-brand-50 p-3 rounded-xl border border-brand-200 animate-fade-in shadow-inner">
                       <Clock size={16} className="text-brand-600" />
                       <input 
                         type="number" 
                         min="0.5" 
                         step="0.5"
-                        className="w-16 p-1 text-sm border border-brand-300 rounded focus:ring-1 focus:ring-brand-500 outline-none font-bold"
+                        className="w-16 p-1.5 text-sm border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                         value={editHoursValue}
                         onChange={(e) => setEditHoursValue(Number(e.target.value))}
                         autoFocus
                       />
-                      <span className="text-xs font-bold text-brand-600">h</span>
+                      <span className="text-xs font-black text-brand-600 uppercase">h</span>
                       <div className="flex gap-1 ml-auto">
                         <button 
                           onClick={() => handleUpdateHours(schedule.id)}
-                          className="p-1 bg-brand-600 text-white rounded hover:bg-brand-700"
+                          className="p-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
                         >
                           <Check size={14} />
                         </button>
                         <button 
                           onClick={() => setEditingScheduleId(null)}
-                          className="p-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                          className="p-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300"
                         >
                           <X size={14} />
                         </button>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-2 font-medium bg-gray-50 px-2 py-1 rounded w-fit">
-                      <Clock size={16} className="text-brand-500" />
-                      <span className="text-sm">{schedule.hoursPerDay} hours / day</span>
+                    <div className="flex items-center space-x-2 font-black bg-gray-50 px-3 py-1.5 rounded-xl w-fit text-brand-600 text-[10px] uppercase tracking-widest border border-gray-100">
+                      <Clock size={14} />
+                      <span>{schedule.hoursPerDay} hours per shift</span>
                     </div>
                   )}
                 </div>
               </div>
             ))}
             {schedules.length === 0 && !isAddingSchedule && (
-              <div className="col-span-full py-16 text-center text-gray-400 bg-gray-50 border-2 border-dashed rounded-xl">
-                No shifts found for this user.
+              <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center gap-3">
+                <Calendar size={48} className="text-gray-200" />
+                <p className="italic font-bold text-sm uppercase tracking-widest">No operational shifts scheduled for this period.</p>
               </div>
             )}
           </div>
         </>
+      ) : (
+        <div className="space-y-6">
+          {isAddingOffice && isAdmin && (
+             <div className="bg-white p-6 rounded-2xl border border-brand-100 shadow-xl space-y-4 animate-fade-in">
+                <h3 className="font-black text-brand-900 uppercase tracking-widest border-b pb-2">Add New Service Site</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                   <Input label="Site Name" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} />
+                   <Input label="Eircode / ZIP" value={newOffice.eircode} onChange={e => setNewOffice({...newOffice, eircode: e.target.value})} />
+                   <Input label="Full Address" value={newOffice.address} onChange={e => setNewOffice({...newOffice, address: e.target.value})} />
+                </div>
+                <div className="flex gap-2">
+                   <Button onClick={handleAddOffice} disabled={isLoading} className="font-bold">
+                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Save Site
+                   </Button>
+                   <Button variant="outline" onClick={() => setIsAddingOffice(false)} className="font-bold">Cancel</Button>
+                </div>
+             </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {offices.map((office) => (
+              <div key={office.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 group hover:shadow-md transition-all">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="bg-brand-50 p-3 rounded-xl text-brand-600">
+                    <Building2 size={24} />
+                  </div>
+                  {isAdmin && (
+                    <button onClick={() => handleDeleteOffice(office.id)} className="text-gray-300 hover:text-red-500 p-1">
+                      <Trash2 size={20} />
+                    </button>
+                  )}
+                </div>
+                <h3 className="font-black text-gray-900 text-lg leading-tight mb-1">{office.name}</h3>
+                <p className="text-[10px] font-black text-brand-500 uppercase tracking-widest mb-4">{office.eircode || 'No Eircode'}</p>
+                <div className="flex items-start gap-2 text-gray-500">
+                  <MapPin size={16} className="mt-1 shrink-0" />
+                  <p className="text-sm font-medium">{office.address}</p>
+                </div>
+              </div>
+            ))}
+            {offices.length === 0 && !isAddingOffice && (
+              <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl">
+                 <p className="font-bold italic">No site locations registered yet.</p>
+              </div>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );
