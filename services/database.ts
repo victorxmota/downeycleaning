@@ -93,7 +93,6 @@ export const Database = {
   getSchedulesByUser: async (userId: string): Promise<ScheduleItem[]> => {
     const q = query(collection(db, SCHEDULES_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    // Fix: Spread types may only be created from object types.
     return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as ScheduleItem));
   },
 
@@ -112,7 +111,6 @@ export const Database = {
 
   getOffices: async (): Promise<Office[]> => {
     const querySnapshot = await getDocs(collection(db, OFFICES_COL));
-    // Fix: Spread types may only be created from object types.
     return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as Office));
   },
 
@@ -128,7 +126,6 @@ export const Database = {
     const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
     const active = querySnapshot.docs
-      // Fix: Spread types may only be created from object types.
       .map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord))
       .find(r => !r.endTime);
     return active || null;
@@ -136,14 +133,12 @@ export const Database = {
 
   getAllRecords: async (): Promise<TimeRecord[]> => {
     const querySnapshot = await getDocs(collection(db, RECORDS_COL));
-    // Fix: Spread types may only be created from object types.
     return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord));
   },
 
   getRecordsByUser: async (userId: string): Promise<TimeRecord[]> => {
     const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    // Fix: Spread types may only be created from object types.
     return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord));
   },
 
@@ -181,6 +176,15 @@ export const Database = {
     }
     const docRef = doc(db, RECORDS_COL, recordId);
     await updateDoc(docRef, sanitizeData(dataToUpdate));
+  },
+
+  updateRecord: async (recordId: string, updates: Partial<TimeRecord>) => {
+    const docRef = doc(db, RECORDS_COL, recordId);
+    await updateDoc(docRef, sanitizeData(updates));
+  },
+
+  addRecord: async (record: Omit<TimeRecord, 'id'>) => {
+    await addDoc(collection(db, RECORDS_COL), sanitizeData(record));
   },
 
   uploadFile: async (file: File, path: string): Promise<string> => {
