@@ -93,11 +93,17 @@ export const Database = {
   getSchedulesByUser: async (userId: string): Promise<ScheduleItem[]> => {
     const q = query(collection(db, SCHEDULES_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as ScheduleItem));
+    // Fix: Spread types may only be created from object types.
+    return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as ScheduleItem));
   },
 
   addSchedule: async (schedule: Omit<ScheduleItem, 'id'>) => {
     await addDoc(collection(db, SCHEDULES_COL), sanitizeData(schedule));
+  },
+
+  updateSchedule: async (id: string, updates: Partial<ScheduleItem>) => {
+    const docRef = doc(db, SCHEDULES_COL, id);
+    await updateDoc(docRef, sanitizeData(updates));
   },
 
   deleteSchedule: async (id: string) => {
@@ -106,7 +112,8 @@ export const Database = {
 
   getOffices: async (): Promise<Office[]> => {
     const querySnapshot = await getDocs(collection(db, OFFICES_COL));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Office));
+    // Fix: Spread types may only be created from object types.
+    return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as Office));
   },
 
   addOffice: async (office: Omit<Office, 'id'>) => {
@@ -121,20 +128,23 @@ export const Database = {
     const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
     const active = querySnapshot.docs
-      .map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord))
+      // Fix: Spread types may only be created from object types.
+      .map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord))
       .find(r => !r.endTime);
     return active || null;
   },
 
   getAllRecords: async (): Promise<TimeRecord[]> => {
     const querySnapshot = await getDocs(collection(db, RECORDS_COL));
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord));
+    // Fix: Spread types may only be created from object types.
+    return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord));
   },
 
   getRecordsByUser: async (userId: string): Promise<TimeRecord[]> => {
     const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord));
+    // Fix: Spread types may only be created from object types.
+    return querySnapshot.docs.map(doc => ({ ...doc.data() as any, id: doc.id } as TimeRecord));
   },
 
   startShift: async (record: Omit<TimeRecord, 'id' | 'photoUrl'>, photoFile?: File): Promise<TimeRecord> => {

@@ -5,7 +5,7 @@ import { Database } from '../services/database';
 import { ScheduleItem, UserRole, User, Office, OfficeScheduleConfig } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Trash2, Calendar, Clock, MapPin, Building2, Save, X, CheckSquare, Square, Loader2 } from 'lucide-react';
+import { Trash2, Calendar, Clock, MapPin, Building2, Save, X, CheckSquare, Square, Loader2, Edit2, Check } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -20,6 +20,10 @@ export const Agenda: React.FC = () => {
   const [viewMode, setViewMode] = useState<'schedule' | 'offices'>('schedule');
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingOffice, setIsAddingOffice] = useState(false);
+
+  // States for editing hours
+  const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
+  const [editHoursValue, setEditHoursValue] = useState<number>(0);
 
   const [newSchedule, setNewSchedule] = useState<Partial<ScheduleItem>>({
     hoursPerDay: 4
@@ -123,6 +127,21 @@ export const Agenda: React.FC = () => {
     setIsLoading(false);
   };
 
+  const handleUpdateHours = async (id: string) => {
+    setIsLoading(true);
+    try {
+      await Database.updateSchedule(id, { hoursPerDay: editHoursValue });
+      const targetUserId = isAdmin ? selectedUser : user?.id;
+      if (targetUserId) await loadSchedules(targetUserId);
+      setEditingScheduleId(null);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to update hours.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleDeleteSchedule = async (id: string) => {
     if (window.confirm('Are you sure you want to remove this schedule?')) {
       setIsLoading(true);
@@ -131,6 +150,11 @@ export const Agenda: React.FC = () => {
       if (targetUserId) await loadSchedules(targetUserId);
       setIsLoading(false);
     }
+  };
+
+  const startEditing = (schedule: ScheduleItem) => {
+    setEditingScheduleId(schedule.id);
+    setEditHoursValue(schedule.hoursPerDay);
   };
 
   const handleOfficeConfigChange = (dayIndex: number, field: 'isActive' | 'hours', value: any) => {
@@ -457,9 +481,20 @@ export const Agenda: React.FC = () => {
             {schedules.sort((a, b) => a.dayOfWeek - b.dayOfWeek).map((schedule) => (
               <div key={schedule.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-5 relative group hover:shadow-md transition-shadow">
                 {(isAdmin || user?.id === schedule.userId) && (
-                  <button onClick={() => handleDeleteSchedule(schedule.id)} className="absolute top-4 right-4 text-gray-300 hover:text-red-500 transition-colors">
-                    <Trash2 size={18} />
-                  </button>
+                  <div className="absolute top-4 right-4 flex gap-2">
+                    {editingScheduleId !== schedule.id && (
+                      <button 
+                        onClick={() => startEditing(schedule)} 
+                        className="text-gray-300 hover:text-brand-500 transition-colors"
+                        title="Edit Hours"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                    )}
+                    <button onClick={() => handleDeleteSchedule(schedule.id)} className="text-gray-300 hover:text-red-500 transition-colors">
+                      <Trash2 size={18} />
+                    </button>
+                  </div>
                 )}
                 <div className="flex items-center space-x-2 mb-3 text-brand-500">
                   <Calendar size={18} />
@@ -473,10 +508,41 @@ export const Agenda: React.FC = () => {
                       <p className="text-xs text-gray-500">{schedule.address}</p>
                     </div>
                   </div>
-                  <div className="flex items-center space-x-2 font-medium bg-gray-50 px-2 py-1 rounded w-fit">
-                    <Clock size={16} className="text-brand-500" />
-                    <span className="text-sm">{schedule.hoursPerDay} hours / day</span>
-                  </div>
+                  
+                  {editingScheduleId === schedule.id ? (
+                    <div className="flex items-center gap-2 bg-brand-50 p-2 rounded-lg border border-brand-200 animate-fade-in">
+                      <Clock size={16} className="text-brand-600" />
+                      <input 
+                        type="number" 
+                        min="0.5" 
+                        step="0.5"
+                        className="w-16 p-1 text-sm border border-brand-300 rounded focus:ring-1 focus:ring-brand-500 outline-none font-bold"
+                        value={editHoursValue}
+                        onChange={(e) => setEditHoursValue(Number(e.target.value))}
+                        autoFocus
+                      />
+                      <span className="text-xs font-bold text-brand-600">h</span>
+                      <div className="flex gap-1 ml-auto">
+                        <button 
+                          onClick={() => handleUpdateHours(schedule.id)}
+                          className="p-1 bg-brand-600 text-white rounded hover:bg-brand-700"
+                        >
+                          <Check size={14} />
+                        </button>
+                        <button 
+                          onClick={() => setEditingScheduleId(null)}
+                          className="p-1 bg-gray-200 text-gray-600 rounded hover:bg-gray-300"
+                        >
+                          <X size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center space-x-2 font-medium bg-gray-50 px-2 py-1 rounded w-fit">
+                      <Clock size={16} className="text-brand-500" />
+                      <span className="text-sm">{schedule.hoursPerDay} hours / day</span>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}

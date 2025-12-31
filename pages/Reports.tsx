@@ -255,9 +255,9 @@ export const Reports: React.FC = () => {
           <label className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Timeframe</label>
           <select className="border p-2.5 rounded-xl bg-gray-50 text-sm font-bold focus:ring-2 focus:ring-brand-500 transition-all" value={selectedPeriod} onChange={e => setSelectedPeriod(e.target.value as PeriodType)}>
             <option value="daily">Today</option>
-            <option value="weekly">This Week</option>
-            <option value="monthly">This Month</option>
-            <option value="yearly">This Year</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+            <option value="yearly">Yearly</option>
             <option value="custom">Custom Range</option>
           </select>
         </div>
