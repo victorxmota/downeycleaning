@@ -22,9 +22,10 @@ import {
   ChevronDown,
   Keyboard,
   ExternalLink,
-  ShieldCheck
+  ShieldCheck,
+  Trash2
 } from 'lucide-react';
-import jsPDF from 'jspdf';
+import jsPDF from 'jsPDF';
 import autoTable from 'jspdf-autotable';
 import { 
   format, 
@@ -284,6 +285,23 @@ export const Reports: React.FC = () => {
     } catch (e) {
       console.error(e);
       alert("Failed to update record.");
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
+  const handleDeleteRecord = async (recordId: string) => {
+    if (!window.confirm("Are you sure you want to delete this shift record? This action cannot be undone.")) {
+      return;
+    }
+
+    setIsUpdating(true);
+    try {
+      await Database.deleteRecord(recordId);
+      await loadData();
+    } catch (e) {
+      console.error(e);
+      alert("Failed to delete record.");
     } finally {
       setIsUpdating(false);
     }
@@ -711,31 +729,42 @@ export const Reports: React.FC = () => {
                       </td>
                       {isAdmin && (
                         <td className="p-4 text-center">
-                          {isEditing ? (
-                            <div className="flex justify-center gap-1">
-                              <button 
-                                onClick={() => handleSaveEdit(record)}
-                                disabled={isUpdating}
-                                className="p-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
-                              >
-                                {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
-                              </button>
-                              <button 
-                                onClick={() => setEditingRecordId(null)}
-                                className="p-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors"
-                              >
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <button 
-                              onClick={() => startEditing(record)}
-                              className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
-                              title="Edit Record"
-                            >
-                              <Edit2 size={16} />
-                            </button>
-                          )}
+                          <div className="flex justify-center gap-1">
+                            {isEditing ? (
+                              <>
+                                <button 
+                                  onClick={() => handleSaveEdit(record)}
+                                  disabled={isUpdating}
+                                  className="p-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+                                >
+                                  {isUpdating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                                </button>
+                                <button 
+                                  onClick={() => setEditingRecordId(null)}
+                                  className="p-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300 transition-colors"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            ) : (
+                              <>
+                                <button 
+                                  onClick={() => startEditing(record)}
+                                  className="p-2 text-brand-600 hover:bg-brand-50 rounded-lg transition-colors"
+                                  title="Edit Record"
+                                >
+                                  <Edit2 size={16} />
+                                </button>
+                                <button 
+                                  onClick={() => handleDeleteRecord(record.id)}
+                                  className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                  title="Delete Record"
+                                >
+                                  <Trash2 size={16} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
                       )}
                     </tr>

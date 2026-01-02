@@ -62,7 +62,7 @@ export const Login: React.FC = () => {
           <div className="relative">
             <Input 
               label="Email or Account ID" 
-              placeholder="name@company.com or 12345" 
+              placeholder="name@downeycleaning.ie" 
               value={identifier} 
               onChange={(e) => setIdentifier(e.target.value)} 
               required
