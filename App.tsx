@@ -12,6 +12,7 @@ import { CheckIn } from './pages/CheckIn';
 import { Reports } from './pages/Reports';
 import { Profile } from './pages/Profile';
 import { Users } from './pages/Users';
+import { Dashboard } from './pages/Dashboard';
 import { ShieldAlert } from 'lucide-react';
 
 interface AuthContextType {
@@ -70,7 +71,6 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth as any, async (firebaseUser) => {
-      // Definimos como true sempre que houver uma mudança de estado para evitar redirecionamentos precoces
       setIsLoading(true);
       
       if (firebaseUser) {
@@ -100,7 +100,15 @@ const App: React.FC = () => {
       <HashRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
+          <Route 
+            path="/" 
+            element={
+              <ProtectedRoute>
+                {user?.role === UserRole.ADMIN ? <Dashboard /> : <Agenda />}
+              </ProtectedRoute>
+            } 
+          />
+          <Route path="/agenda" element={<ProtectedRoute><Agenda /></ProtectedRoute>} />
           <Route path="/check-in" element={<ProtectedRoute allowedRoles={[UserRole.EMPLOYEE]}><CheckIn /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/users" element={<ProtectedRoute allowedRoles={[UserRole.ADMIN]}><Users /></ProtectedRoute>} />

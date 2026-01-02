@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut } from 'lucide-react';
+import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard } from 'lucide-react';
 import { UserRole } from '../types';
 import { useAuth } from '../App';
 
@@ -30,7 +30,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isActive = (path: string) => location.pathname === path;
 
   const menuItems = [
-    { name: 'Schedule', path: '/', icon: Calendar, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: [UserRole.ADMIN] },
+    { name: 'Schedule', path: user?.role === UserRole.ADMIN ? '/agenda' : '/', icon: Calendar, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
     { name: 'Check-In/Out', path: '/check-in', icon: ClipboardCheck, roles: [UserRole.EMPLOYEE] },
     { name: 'Users', path: '/users', icon: Users, roles: [UserRole.ADMIN] },
     { name: 'Reports', path: '/reports', icon: BarChart2, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
