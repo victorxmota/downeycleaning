@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
-import { TimeRecord, SafetyChecklist } from '../types';
+import { TimeRecord, SafetyChecklist, GeoLocation } from '../types';
 import { Button } from '../components/ui/Button';
 import { 
   Camera, 
@@ -22,7 +22,9 @@ import {
   ChevronDown,
   Edit2,
   PauseCircle,
-  Play
+  Play,
+  // GpsFixed does not exist in lucide-react, removed it as it was unused
+  AlertCircle
 } from 'lucide-react';
 
 const INITIAL_CHECKLIST: SafetyChecklist = {
@@ -65,6 +67,7 @@ export const CheckIn: React.FC = () => {
   
   const [isProcessing, setIsProcessing] = useState(false);
   const [initializing, setInitializing] = useState(true);
+  const [gpsStatus, setGpsStatus] = useState<'checking' | 'acquired' | 'denied' | 'error'>('checking');
   
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
@@ -104,6 +107,9 @@ export const CheckIn: React.FC = () => {
         if (locArray.length === 0) {
           setIsManualLocation(true);
         }
+
+        // Test GPS on mount
+        checkGpsAvailability();
       } catch (e) {
         console.error("Error initializing check-in", e);
       } finally {
@@ -112,6 +118,21 @@ export const CheckIn: React.FC = () => {
     };
     init();
   }, [user]);
+
+  const checkGpsAvailability = () => {
+    if (!navigator.geolocation) {
+      setGpsStatus('error');
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      () => setGpsStatus('acquired'),
+      (err) => {
+        if (err.code === 1) setGpsStatus('denied');
+        else setGpsStatus('error');
+      },
+      { timeout: 5000 }
+    );
+  };
 
   useEffect(() => {
     if (activeSession) {
@@ -122,7 +143,6 @@ export const CheckIn: React.FC = () => {
         let now = Date.now();
         let currentEffectiveTime = now - startTime - totalPausedMs;
 
-        // If currently paused, we also subtract the time since the pause started
         if (activeSession.isPaused && activeSession.pausedAt) {
           const pausedAt = new Date(activeSession.pausedAt).getTime();
           currentEffectiveTime -= (now - pausedAt);
@@ -161,16 +181,27 @@ export const CheckIn: React.FC = () => {
     }
   };
 
-  const getCurrentLocation = (): Promise<{lat: number, lng: number} | null> => {
-    return new Promise((resolve) => {
+  const getCurrentLocation = (): Promise<GeoLocation> => {
+    return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        resolve(null);
+        reject(new Error("Your browser doesn't support geolocation. GPS is required for this action."));
         return;
       }
       navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-        (err) => resolve(null),
-        { enableHighAccuracy: true, timeout: 4000 }
+        (pos) => {
+          setGpsStatus('acquired');
+          resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        },
+        (err) => {
+          if (err.code === 1) {
+            setGpsStatus('denied');
+            reject(new Error("GPS permission denied. You must allow location access to perform this action."));
+          } else {
+            setGpsStatus('error');
+            reject(new Error("Unable to retrieve GPS coordinates. Please ensure your device's location is turned on."));
+          }
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
       );
     });
   };
@@ -197,15 +228,17 @@ export const CheckIn: React.FC = () => {
           startTime: new Date().toISOString(),
           date: new Date().toISOString().split('T')[0],
           safetyChecklist: { ...checklist },
-          startLocation: location || undefined
+          startLocation: location
         };
 
         const newRecord = await Database.startShift(recordData, photoFile || undefined);
         setActiveSession(newRecord);
         setPhotoFile(null);
+        setGpsStatus('acquired');
     } catch (error: any) {
         console.error("Failed to start shift:", error);
-        alert(`Error: ${error.message || "Could not start shift. Check your connection."}`);
+        alert(error.message || "Could not start shift due to GPS requirement.");
+        if (error.message.includes("permission")) setGpsStatus('denied');
     } finally {
         setIsProcessing(false);
     }
@@ -233,8 +266,8 @@ export const CheckIn: React.FC = () => {
       const location = await getCurrentLocation();
       await Database.endShift(activeSession.id, {
         endTime: new Date().toISOString(),
-        endLocation: location || undefined,
-        isPaused: false // Ensure it's not paused on finish
+        endLocation: location,
+        isPaused: false
       }, endPhotoFile || undefined);
       
       setActiveSession(null);
@@ -244,9 +277,10 @@ export const CheckIn: React.FC = () => {
       setEndPhotoFile(null);
       setLocationName('');
       setChecklist(INITIAL_CHECKLIST);
+      setGpsStatus('acquired');
     } catch (error: any) {
       console.error(error);
-      alert(`Error ending shift: ${error.message}`);
+      alert(error.message || "Could not end shift. GPS location is mandatory for verification.");
     } finally {
       setIsProcessing(false);
     }
@@ -297,7 +331,7 @@ export const CheckIn: React.FC = () => {
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 pb-20">
-      <header className="flex justify-between items-start">
+      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <ShieldCheck className="text-brand-600" />
@@ -305,12 +339,34 @@ export const CheckIn: React.FC = () => {
           </h2>
           <p className="text-gray-500 text-sm italic mt-1">"Safety is our own responsibility. Take 20 seconds to be aware of hazards."</p>
         </div>
+        
+        {/* GPS Status Badge */}
+        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${
+          gpsStatus === 'acquired' ? 'bg-green-50 text-green-700 border-green-200' : 
+          gpsStatus === 'denied' ? 'bg-red-50 text-red-700 border-red-200 animate-pulse' :
+          'bg-gray-50 text-gray-500 border-gray-200'
+        }`}>
+          {gpsStatus === 'acquired' ? <><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> GPS ACTIVE</> :
+           gpsStatus === 'denied' ? <><AlertCircle size={12} /> GPS DENIED</> :
+           <><Loader2 size={12} className="animate-spin" /> GPS REQUIRED</>}
+        </div>
+
         {activeSession && (
           <div className={`px-4 py-2 rounded-full font-mono font-bold transition-colors ${activeSession.isPaused ? 'bg-orange-500 text-white' : 'bg-brand-900 text-white animate-pulse'}`}>
             {formatTime(elapsedTime)}
           </div>
         )}
       </header>
+
+      {gpsStatus === 'denied' && (
+        <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3 animate-shake">
+          <AlertTriangle className="text-red-600 shrink-0" size={24} />
+          <div>
+            <p className="text-red-900 font-black uppercase text-xs tracking-widest">Action Blocked: Location Access Denied</p>
+            <p className="text-red-700 text-xs mt-1">Downey Cleaning Services requires GPS verification for all field logs. Please reset your browser's location permissions for this site and refresh the page.</p>
+          </div>
+        </div>
+      )}
 
       {/* Checklist Sections */}
       <Section title="Plan of Action" icon={ShieldCheck}>
@@ -480,9 +536,10 @@ export const CheckIn: React.FC = () => {
                     onClick={handleEndShift} 
                     variant="danger" 
                     className="flex-1 shadow-xl font-bold bg-red-500 hover:bg-red-600 border-none"
-                    disabled={isProcessing}
+                    disabled={isProcessing || gpsStatus === 'denied'}
                 >
-                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <StopCircle size={20} className="mr-2"/>} Complete Shift
+                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <StopCircle size={20} className="mr-2"/>} 
+                    {gpsStatus === 'denied' ? 'GPS Error' : 'Complete Shift'}
                 </Button>
              </div>
           </div>
@@ -492,10 +549,10 @@ export const CheckIn: React.FC = () => {
               onClick={handleStartShift} 
               size="lg" 
               className="w-full shadow-md py-4 text-xl"
-              disabled={isProcessing}
+              disabled={isProcessing || gpsStatus === 'denied'}
               >
-              {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2"/>} 
-              {isProcessing ? "Processing..." : "Submit Plan & Start"}
+              {isProcessing ? <Loader2 className="animate-spin mr-2"/> : (gpsStatus === 'denied' ? <AlertCircle className="mr-2"/> : <PlayCircle className="mr-2"/>)} 
+              {gpsStatus === 'denied' ? "GPS Required to Start" : isProcessing ? "Verifying GPS..." : "Submit Plan & Start"}
             </Button>
             <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">Downey Cleaning Services Official Portal</p>
           </div>
