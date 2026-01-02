@@ -183,6 +183,11 @@ export const Database = {
     await updateDoc(docRef, sanitizeData(updates));
   },
 
+  deleteRecord: async (recordId: string) => {
+    const docRef = doc(db, RECORDS_COL, recordId);
+    await deleteDoc(docRef);
+  },
+
   addRecord: async (record: Omit<TimeRecord, 'id'>) => {
     await addDoc(collection(db, RECORDS_COL), sanitizeData(record));
   },
