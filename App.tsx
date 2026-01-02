@@ -70,12 +70,16 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth as any, async (firebaseUser) => {
+      // Definimos como true sempre que houver uma mudança de estado para evitar redirecionamentos precoces
+      setIsLoading(true);
+      
       if (firebaseUser) {
         try {
           const appUser = await Database.syncUser(firebaseUser);
           setUser(appUser);
         } catch (error) {
           console.error("Failed to sync user", error);
+          setUser(null);
         }
       } else {
         setUser(null);
