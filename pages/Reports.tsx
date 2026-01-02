@@ -21,7 +21,8 @@ import {
   User as UserIcon,
   ChevronDown,
   Keyboard,
-  ExternalLink
+  ExternalLink,
+  ShieldCheck
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -44,6 +45,19 @@ import {
 } from 'date-fns';
 
 type PeriodType = 'daily' | 'weekly' | 'monthly' | 'yearly' | 'custom';
+
+const CHECKLIST_LABELS: Record<string, string> = {
+  knowJobSafety: "Job Safety", weatherCheck: "Weather", safePassInDate: "Safe Pass", 
+  hazardAwareness: "Hazards", floorConditions: "Floors", manualHandlingCert: "Manual Handling",
+  liftingHelp: "Lifting Help", anchorPoints: "Anchor Points", ladderFooting: "Ladder Footing",
+  safetyCones: "Cones", communication: "Communc.", laddersCheck: "Ladders", 
+  sharpEdges: "Sharp Edges", scraperCovers: "Scraper Covers", hotSurfaces: "Hot Surfaces",
+  chemicalCourse: "Chem. Course", chemicalAwareness: "Chem. Awareness", 
+  tidyEquipment: "Tidy Equip.", laddersStored: "Ladders Stored", highVis: "PPE: High Vis",
+  helmet: "PPE: Helmet", goggles: "PPE: Goggles", gloves: "PPE: Gloves",
+  mask: "PPE: Mask", earMuffs: "PPE: Ear Muffs", faceGuard: "PPE: Face Guard",
+  harness: "PPE: Harness", boots: "PPE: Boots"
+};
 
 const INITIAL_SAFETY: SafetyChecklist = {
   knowJobSafety: true, weatherCheck: true, safePassInDate: true, hazardAwareness: true,
@@ -235,6 +249,13 @@ export const Reports: React.FC = () => {
     return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
   };
 
+  const getCheckedItems = (checklist?: SafetyChecklist) => {
+    if (!checklist) return [];
+    return Object.entries(checklist)
+      .filter(([_, checked]) => checked === true)
+      .map(([key, _]) => CHECKLIST_LABELS[key] || key);
+  };
+
   const startEditing = (record: TimeRecord) => {
     setEditingRecordId(record.id);
     setEditLocation(record.locationName);
@@ -327,21 +348,28 @@ export const Reports: React.FC = () => {
           const end = rec.endTime ? new Date(rec.endTime).getTime() : Date.now();
           const pause = rec.totalPausedMs || 0;
           const duration = msToTime(end - start - pause);
+          const checkedSafety = getCheckedItems(rec.safetyChecklist).join(', ');
+
           return [
             format(parseISO(rec.date), 'dd/MM/yyyy'),
             rec.locationName,
             `${format(parseISO(rec.startTime), 'HH:mm')} - ${rec.endTime ? format(parseISO(rec.endTime), 'HH:mm') : 'Active' }`,
             duration,
+            checkedSafety || 'None',
             `GPS IN: ${formatGPS(rec.startLocation)}\nGPS OUT: ${formatGPS(rec.endLocation)}`,
             rec.endTime ? 'COMPLETED' : 'IN PROGRESS'
           ];
       });
 
     autoTable(doc, {
-      head: [['DATE', 'SITE LOCATION', 'SHIFT TIME', 'DURATION', 'GPS LOGS', 'STATUS']],
+      head: [['DATE', 'SITE LOCATION', 'SHIFT TIME', 'DURATION', 'SAFETY COMPLIANCE', 'GPS LOGS', 'STATUS']],
       body: tableData,
       startY: 42,
-      styles: { fontSize: 8, cellPadding: 3, font: 'helvetica' },
+      styles: { fontSize: 7, cellPadding: 2, font: 'helvetica', overflow: 'linebreak' },
+      columnStyles: {
+        4: { cellWidth: 50 }, // Safety Checklist column width
+        5: { cellWidth: 35 }  // GPS column width
+      },
       headStyles: { fillColor: [0, 84, 139], textColor: [255, 255, 255], fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [240, 247, 255] }
     });
@@ -540,6 +568,7 @@ export const Reports: React.FC = () => {
                 <th className="p-4">Date / Staff</th>
                 <th className="p-4">Location</th>
                 <th className="p-4">Duration</th>
+                <th className="p-4">Safety</th>
                 <th className="p-4">GPS Log</th>
                 <th className="p-4">Evidence</th>
                 <th className="p-4 text-center">Status</th>
@@ -555,6 +584,7 @@ export const Reports: React.FC = () => {
                   const end = record.endTime ? new Date(record.endTime).getTime() : Date.now();
                   const pause = record.totalPausedMs || 0;
                   const diff = end - start - pause;
+                  const checkedItems = getCheckedItems(record.safetyChecklist);
                   
                   return (
                     <tr key={record.id} className={`hover:bg-brand-50/30 transition-colors group ${isEditing ? 'bg-brand-50' : ''}`}>
@@ -596,6 +626,27 @@ export const Reports: React.FC = () => {
                             </div>
                           </>
                         )}
+                      </td>
+                      <td className="p-4">
+                        <div className="flex flex-wrap gap-1 max-w-[150px]">
+                          {checkedItems.length > 0 ? (
+                            <>
+                              <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-0.5 rounded text-[9px] font-black border border-green-100">
+                                <ShieldCheck size={10} /> {checkedItems.length} ITEMS
+                              </div>
+                              <div className="hidden group-hover:flex absolute z-50 bg-white p-3 rounded-xl shadow-2xl border border-gray-100 flex-col gap-1 min-w-[180px] -mt-2">
+                                <p className="text-[10px] font-black text-brand-600 uppercase border-b pb-1 mb-1">Safety Compliance List</p>
+                                {checkedItems.map((item, idx) => (
+                                  <div key={idx} className="flex items-center gap-2 text-[10px] text-gray-600">
+                                    <div className="w-1 h-1 bg-green-500 rounded-full" /> {item}
+                                  </div>
+                                ))}
+                              </div>
+                            </>
+                          ) : (
+                            <span className="text-[9px] text-gray-400 font-bold italic">No data</span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-1 text-[9px] text-gray-400 font-mono">
@@ -691,7 +742,7 @@ export const Reports: React.FC = () => {
                   );
                 })}
               {filteredRecords.length === 0 && (
-                <tr><td colSpan={isAdmin ? 7 : 6} className="p-20 text-center text-gray-400 italic font-bold">No operational data found for this period.</td></tr>
+                <tr><td colSpan={isAdmin ? 8 : 7} className="p-20 text-center text-gray-400 italic font-bold">No operational data found for this period.</td></tr>
               )}
             </tbody>
           </table>
