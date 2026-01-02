@@ -20,7 +20,8 @@ import {
   PlusCircle,
   User as UserIcon,
   ChevronDown,
-  Keyboard
+  Keyboard,
+  ExternalLink
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -227,6 +228,11 @@ export const Reports: React.FC = () => {
   const formatGPS = (loc?: {lat: number, lng: number}) => {
     if (!loc) return 'N/A';
     return `${loc.lat.toFixed(4)}, ${loc.lng.toFixed(4)}`;
+  };
+
+  const getMapsLink = (loc?: {lat: number, lng: number}) => {
+    if (!loc) return null;
+    return `https://www.google.com/maps?q=${loc.lat},${loc.lng}`;
   };
 
   const startEditing = (record: TimeRecord) => {
@@ -593,12 +599,39 @@ export const Reports: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <div className="flex flex-col gap-1 text-[9px] text-gray-400 font-mono">
-                          <span className="flex items-center gap-1">
-                            <MapPin size={10} className="text-green-500" /> IN: {formatGPS(record.startLocation)}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin size={10} className="text-red-500" /> OUT: {formatGPS(record.endLocation)}
-                          </span>
+                          {record.startLocation ? (
+                            <a 
+                              href={getMapsLink(record.startLocation) || '#'} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 hover:text-brand-600 hover:underline transition-colors"
+                            >
+                              <MapPin size={10} className="text-green-500" /> 
+                              IN: {formatGPS(record.startLocation)}
+                              <ExternalLink size={8} className="opacity-50" />
+                            </a>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <MapPin size={10} className="text-gray-300" /> IN: N/A
+                            </span>
+                          )}
+                          
+                          {record.endLocation ? (
+                            <a 
+                              href={getMapsLink(record.endLocation) || '#'} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-1 hover:text-brand-600 hover:underline transition-colors"
+                            >
+                              <MapPin size={10} className="text-red-500" /> 
+                              OUT: {formatGPS(record.endLocation)}
+                              <ExternalLink size={8} className="opacity-50" />
+                            </a>
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <MapPin size={10} className="text-gray-300" /> OUT: N/A
+                            </span>
+                          )}
                         </div>
                       </td>
                       <td className="p-4">
