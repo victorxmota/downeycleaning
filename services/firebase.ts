@@ -10,6 +10,7 @@ import {
   signInWithEmailAndPassword,
   updateEmail as updateAuthEmail,
   updatePassword as updateAuthPassword,
+  sendPasswordResetEmail,
   User as FirebaseUserInstance
 } from "firebase/auth";
 import { getFirestore, Firestore } from "firebase/firestore";
@@ -60,6 +61,10 @@ export const updateUserAuthEmail = async (newEmail: string) => {
 export const updateUserAuthPassword = async (newPassword: string) => {
   if (!auth.currentUser) throw new Error("No user logged in");
   await updateAuthPassword(auth.currentUser, newPassword);
+};
+
+export const resetUserPassword = async (email: string) => {
+  await sendPasswordResetEmail(auth, email);
 };
 
 export const logoutFirebase = async () => {

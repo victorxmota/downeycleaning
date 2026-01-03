@@ -1,11 +1,11 @@
 
 import React, { useState, useEffect } from 'react';
 import { Database } from '../services/database';
-import { registerWithEmail } from '../services/firebase';
+import { registerWithEmail, resetUserPassword } from '../services/firebase';
 import { User, UserRole } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Users as UsersIcon, UserPlus, Mail, Phone, Shield, Search, Loader2, X, Trash2, Edit } from 'lucide-react';
+import { Users as UsersIcon, UserPlus, Mail, Phone, Shield, Search, Loader2, X, Trash2, Edit, KeyRound, CheckCircle2 } from 'lucide-react';
 
 export const Users: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -13,6 +13,7 @@ export const Users: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [resetEmailSent, setResetEmailSent] = useState<string | null>(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -43,6 +44,7 @@ export const Users: React.FC = () => {
 
   const handleOpenAdd = () => {
     setEditingUser(null);
+    setResetEmailSent(null);
     setFormData({
       name: '',
       email: '',
@@ -57,6 +59,7 @@ export const Users: React.FC = () => {
 
   const handleOpenEdit = (user: User) => {
     setEditingUser(user);
+    setResetEmailSent(null);
     setFormData({
       name: user.name,
       email: user.email,
@@ -101,6 +104,19 @@ export const Users: React.FC = () => {
       }
     } catch (err: any) {
       setFormError(err.message || 'Error processing request');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  const handleSendResetEmail = async (email: string) => {
+    setFormLoading(true);
+    try {
+      await resetUserPassword(email);
+      setResetEmailSent(email);
+      setTimeout(() => setResetEmailSent(null), 5000);
+    } catch (err: any) {
+      alert('Error sending reset email: ' + err.message);
     } finally {
       setFormLoading(false);
     }
@@ -167,22 +183,33 @@ export const Users: React.FC = () => {
                   value={formData.email} 
                   onChange={e => setFormData({...formData, email: e.target.value})}
                 />
-                {!editingUser && (
+                {!editingUser ? (
                   <Input 
-                    label="Password" 
+                    label="Initial Password" 
                     type="password" 
                     required 
                     value={formData.password} 
                     onChange={e => setFormData({...formData, password: e.target.value})}
                     placeholder="Enter password"
                   />
-                )}
-                {editingUser && (
+                ) : (
                    <div className="flex flex-col">
-                      <label className="text-xs font-bold text-gray-400 uppercase mb-1">Password</label>
-                      <div className="p-2 bg-gray-50 rounded border text-[10px] text-gray-500 italic">
-                        Login credentials can only be reset by the user in their profile.
-                      </div>
+                      <label className="text-xs font-bold text-gray-400 uppercase mb-1">Security / Password</label>
+                      {resetEmailSent === formData.email ? (
+                        <div className="p-3 bg-green-50 rounded-xl border border-green-200 text-[10px] text-green-700 font-bold flex items-center gap-2">
+                          <CheckCircle2 size={16} /> Link sent to {formData.email}!
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => handleSendResetEmail(formData.email)}
+                          disabled={formLoading}
+                          className="flex items-center justify-center gap-2 p-3 bg-brand-50 hover:bg-brand-100 text-brand-700 rounded-xl border border-brand-200 text-xs font-bold transition-all disabled:opacity-50"
+                        >
+                          {formLoading ? <Loader2 size={16} className="animate-spin" /> : <KeyRound size={16} />}
+                          Send Password Reset Link
+                        </button>
+                      )}
                    </div>
                 )}
               </div>
@@ -250,7 +277,7 @@ export const Users: React.FC = () => {
               {isLoading ? (
                 <tr><td colSpan={4} className="p-10 text-center"><Loader2 className="animate-spin mx-auto text-brand-600" /></td></tr>
               ) : filteredUsers.map(user => (
-                <tr key={user.id} className="hover:bg-brand-50/20 transition-colors">
+                <tr key={user.id} className="hover:bg-brand-50/20 transition-colors group">
                   <td className="p-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-brand-100 rounded-full flex items-center justify-center text-brand-600 font-bold shrink-0">
@@ -272,6 +299,14 @@ export const Users: React.FC = () => {
                   </td>
                   <td className="p-4">
                     <div className="flex justify-center gap-2">
+                      <button 
+                        onClick={() => handleSendResetEmail(user.email)}
+                        className={`p-2 rounded-lg transition-all ${resetEmailSent === user.email ? 'text-green-600 bg-green-50' : 'text-orange-500 hover:bg-orange-50'}`}
+                        title="Send Password Reset Link"
+                        disabled={formLoading}
+                      >
+                        {resetEmailSent === user.email ? <CheckCircle2 size={16} /> : <KeyRound size={16} />}
+                      </button>
                       <button 
                         onClick={() => handleOpenEdit(user)}
                         className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
