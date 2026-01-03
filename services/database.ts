@@ -15,6 +15,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./firebase";
 import type { FirebaseUser } from "./firebase";
 import { User, UserRole, ScheduleItem, TimeRecord, Office } from "../types";
+import { GoogleGenAI } from "@google/genai";
 
 const USERS_COL = 'users';
 const SCHEDULES_COL = 'schedules';
@@ -195,5 +196,24 @@ export const Database = {
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
     return await getDownloadURL(snapshot.ref);
+  },
+
+  resolveEircode: async (eircode: string): Promise<string | null> => {
+    if (!eircode || eircode.length < 7) return null;
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-2.5-flash',
+        contents: `Find the complete address for the Irish Eircode: ${eircode}. Return only the address string. If not found, return 'not found'.`,
+        config: {
+          tools: [{ googleMaps: {} }],
+        },
+      });
+      const result = response.text?.trim() || '';
+      return result.toLowerCase().includes('not found') ? null : result;
+    } catch (e) {
+      console.error("Error resolving Eircode using Google Maps grounding:", e);
+      return null;
+    }
   }
 };

@@ -355,7 +355,7 @@ export const Reports: React.FC = () => {
     doc.setFontSize(22); doc.setTextColor(0, 84, 139); doc.text('DOWNEY CLEANING SERVICES', 42, 18);
     doc.setFontSize(8); doc.setTextColor(255, 194, 14); doc.text('PROFESSIONAL HYGIENE SOLUTIONS', 42, 23);
     doc.setFontSize(10); doc.setTextColor(100);
-    doc.text(`Official Service Report: ${reportUser?.name || 'All Personnel'}`, 42, 30);
+    doc.text(`Official Service Report: ${reportUser?.name || 'All Users'}`, 42, 30);
     doc.text(`Total Period Hours: ${msToTime(calculateTotalTime())}`, 42, 35);
     doc.text(`Generated: ${format(new Date(), 'dd/MM/yyyy HH:mm')}`, 280, 15, { align: 'right' });
     
@@ -432,7 +432,7 @@ export const Reports: React.FC = () => {
             </div>
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div className="flex flex-col">
-                    <label className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Personnel</label>
+                    <label className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">User</label>
                     <div className="relative">
                         <UserIcon className="absolute left-3 top-3 text-gray-400" size={16} />
                         <select 
@@ -514,9 +514,9 @@ export const Reports: React.FC = () => {
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex flex-wrap gap-4 items-end">
         {isAdmin && (
           <div className="flex flex-col min-w-[180px]">
-            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">Employee Filter</label>
+            <label className="text-[10px] font-black text-gray-400 uppercase mb-1 tracking-widest">User Filter</label>
             <select className="border p-2.5 rounded-xl bg-gray-50 text-sm font-bold focus:ring-2 focus:ring-brand-500 transition-all" value={selectedUserFilter} onChange={e => setSelectedUserFilter(e.target.value)}>
-              <option value="all">All Personnel</option>
+              <option value="all">All Users</option>
               {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
             </select>
           </div>
@@ -583,7 +583,7 @@ export const Reports: React.FC = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-400 font-black uppercase text-[10px] tracking-[0.2em]">
               <tr>
-                <th className="p-4">Date / Staff</th>
+                <th className="p-4">Date / User</th>
                 <th className="p-4">Location</th>
                 <th className="p-4">Duration</th>
                 <th className="p-4">Safety</th>
@@ -609,7 +609,7 @@ export const Reports: React.FC = () => {
                       <td className="p-4">
                         <div className="font-bold text-gray-900">{format(parseISO(record.date), 'dd/MM/yyyy')}</div>
                         <div className="text-[10px] text-gray-400 font-bold uppercase mt-0.5 tracking-wider">
-                          {users.find(u => u.id === record.userId)?.name || 'Staff Member'}
+                          {users.find(u => u.id === record.userId)?.name || 'User'}
                         </div>
                       </td>
                       <td className="p-4">

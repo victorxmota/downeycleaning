@@ -147,12 +147,12 @@ export const Users: React.FC = () => {
         <div>
           <h2 className="text-2xl font-black text-gray-800 flex items-center gap-2">
             <UsersIcon className="text-brand-600" />
-            Personnel Management
+            Users Management
           </h2>
-          <p className="text-sm text-gray-500">Full control over employee records</p>
+          <p className="text-sm text-gray-500">Full control over user accounts and records</p>
         </div>
         <Button onClick={handleOpenAdd}>
-          <UserPlus size={18} className="mr-2" /> New Employee
+          <UserPlus size={18} className="mr-2" /> New User
         </Button>
       </header>
 
@@ -161,7 +161,7 @@ export const Users: React.FC = () => {
           <div className="bg-white w-full max-w-lg rounded-2xl shadow-2xl overflow-hidden animate-fade-in">
             <div className="bg-brand-900 p-6 flex justify-between items-center">
               <h3 className="text-white font-bold text-lg">
-                {editingUser ? `Edit Professional: ${editingUser.name}` : 'Add New Professional'}
+                {editingUser ? `Edit User: ${editingUser.name}` : 'Add New User'}
               </h3>
               <button onClick={() => setIsAdding(false)} className="text-white/60 hover:text-white">
                 <X size={24} />
@@ -267,7 +267,7 @@ export const Users: React.FC = () => {
           <table className="w-full text-left text-sm">
             <thead className="bg-gray-50 text-gray-400 font-bold uppercase text-[10px] tracking-widest">
               <tr>
-                <th className="p-4">Employee</th>
+                <th className="p-4">User</th>
                 <th className="p-4">Account ID</th>
                 <th className="p-4">Role</th>
                 <th className="p-4 text-center">Actions</th>

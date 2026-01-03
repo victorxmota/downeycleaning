@@ -80,7 +80,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
         <div className="p-4 border-t border-brand-700">
           <div className="mb-4 px-4">
-             <p className="text-[10px] font-black uppercase text-brand-400 tracking-widest">Logged as</p>
+             <p className="text-[10px] font-black uppercase text-brand-400 tracking-widest">Logged in as</p>
              <p className="text-xs font-bold truncate text-white">{user?.name}</p>
           </div>
           <button 
