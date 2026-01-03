@@ -9,7 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@google/genai": "^0.21.0",
+    "@google/genai": "latest",
     "date-fns": "^4.1.0",
     "firebase": "^10.8.1",
     "jspdf": "^3.0.4",
