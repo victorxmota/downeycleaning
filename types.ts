@@ -21,6 +21,7 @@ export interface ScheduleItem {
   address: string;
   dayOfWeek: number;
   hoursPerDay: number;
+  notes?: string;
 }
 
 export interface OfficeScheduleConfig {

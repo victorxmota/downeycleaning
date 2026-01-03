@@ -5,7 +5,7 @@ import { Database } from '../services/database';
 import { ScheduleItem, UserRole, User, Office } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2 } from 'lucide-react';
+import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2, FileText, Info } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -20,10 +20,14 @@ export const Agenda: React.FC = () => {
   
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingOffice, setIsAddingOffice] = useState(false);
+  
+  // Selected shift for detailed modal
+  const [selectedShiftDetail, setSelectedShiftDetail] = useState<ScheduleItem | null>(null);
 
-  // States for editing hours
+  // States for editing a specific schedule
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editHoursValue, setEditHoursValue] = useState<number>(0);
+  const [editNotesValue, setEditNotesValue] = useState<string>('');
 
   // New Office form state
   const [newOffice, setNewOffice] = useState<Partial<Office>>({
@@ -35,7 +39,8 @@ export const Agenda: React.FC = () => {
   const [newSchedule, setNewSchedule] = useState<Partial<ScheduleItem>>({
     hoursPerDay: 4,
     locationName: '',
-    address: ''
+    address: '',
+    notes: ''
   });
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
 
@@ -116,14 +121,15 @@ export const Agenda: React.FC = () => {
           locationName: newSchedule.locationName!,
           address: newSchedule.address!,
           dayOfWeek: dayIndex,
-          hoursPerDay: Number(newSchedule.hoursPerDay)
+          hoursPerDay: Number(newSchedule.hoursPerDay),
+          notes: newSchedule.notes || ''
         };
         await Database.addSchedule(item);
       }
 
       await loadSchedules(targetUserId);
       setIsAddingSchedule(false);
-      setNewSchedule({ hoursPerDay: 4, locationName: '', address: '' });
+      setNewSchedule({ hoursPerDay: 4, locationName: '', address: '', notes: '' });
       setSelectedDays([]);
     } catch (e) {
       console.error(e);
@@ -168,16 +174,19 @@ export const Agenda: React.FC = () => {
     }
   };
 
-  const handleUpdateHours = async (id: string) => {
+  const handleUpdateSchedule = async (id: string) => {
     setIsLoading(true);
     try {
-      await Database.updateSchedule(id, { hoursPerDay: editHoursValue });
+      await Database.updateSchedule(id, { 
+        hoursPerDay: editHoursValue,
+        notes: editNotesValue
+      });
       const targetUserId = isAdmin ? selectedUser : user?.id;
       if (targetUserId) await loadSchedules(targetUserId);
       setEditingScheduleId(null);
     } catch (e) {
       console.error(e);
-      alert("Failed to update hours.");
+      alert("Failed to update schedule.");
     } finally {
       setIsLoading(false);
     }
@@ -196,6 +205,7 @@ export const Agenda: React.FC = () => {
   const startEditing = (schedule: ScheduleItem) => {
     setEditingScheduleId(schedule.id);
     setEditHoursValue(schedule.hoursPerDay);
+    setEditNotesValue(schedule.notes || '');
   };
 
   const handleOfficeSelectForSchedule = (officeId: string) => {
@@ -337,6 +347,16 @@ export const Agenda: React.FC = () => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, address: e.target.value})} 
                   className="bg-slate-800 border-slate-700 placeholder:text-slate-500 font-bold rounded-xl" 
                 />
+
+                <div className="md:col-span-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Description / Notes</label>
+                  <textarea 
+                    className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold min-h-[100px]"
+                    placeholder="Describe specific tasks for this shift..."
+                    value={newSchedule.notes || ''}
+                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewSchedule({...newSchedule, notes: e.target.value})}
+                  />
+                </div>
               </div>
 
               <div className="relative z-10">
@@ -383,14 +403,18 @@ export const Agenda: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {schedules.sort((a, b) => a.dayOfWeek - b.dayOfWeek).map((schedule) => (
-              <div key={schedule.id} className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 relative group hover:shadow-md transition-all border-b-4 border-b-brand-100">
+              <div 
+                key={schedule.id} 
+                onClick={() => setSelectedShiftDetail(schedule)}
+                className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 relative group hover:shadow-md transition-all border-b-4 border-b-brand-100 cursor-pointer"
+              >
                 {isAdmin && (
-                  <div className="absolute top-4 right-4 flex gap-2">
+                  <div className="absolute top-4 right-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     {editingScheduleId !== schedule.id && (
                       <button 
                         onClick={() => startEditing(schedule)} 
                         className="text-gray-300 hover:text-brand-600 transition-colors p-1"
-                        title="Edit Hours"
+                        title="Edit Schedule"
                       >
                         <Edit2 size={16} />
                       </button>
@@ -409,44 +433,64 @@ export const Agenda: React.FC = () => {
                 <div className="space-y-4 text-gray-600">
                   <div className="flex items-start space-x-3">
                     <MapPin size={18} className="mt-1 flex-shrink-0 text-brand-400" />
-                    <div>
-                      <p className="font-black text-gray-900 tracking-tight leading-tight">{schedule.locationName}</p>
-                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5">{schedule.address}</p>
+                    <div className="min-w-0">
+                      <p className="font-black text-gray-900 tracking-tight leading-tight truncate">{schedule.locationName}</p>
+                      <p className="text-[10px] font-bold text-gray-400 uppercase mt-0.5 truncate">{schedule.address}</p>
                     </div>
                   </div>
                   
                   {editingScheduleId === schedule.id ? (
-                    <div className="flex items-center gap-2 bg-brand-50 p-3 rounded-xl border border-brand-200 animate-fade-in shadow-inner">
-                      <Clock size={16} className="text-brand-600" />
-                      <input 
-                        type="number" 
-                        min="0.5" 
-                        step="0.5"
-                        className="w-16 p-1.5 text-sm border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-bold"
-                        value={editHoursValue}
-                        onChange={(e) => setEditHoursValue(Number(e.target.value))}
-                        autoFocus
-                      />
-                      <span className="text-xs font-black text-brand-600 uppercase">h</span>
-                      <div className="flex gap-1 ml-auto">
-                        <button 
-                          onClick={() => handleUpdateHours(schedule.id)}
-                          className="p-1.5 bg-brand-600 text-white rounded-lg hover:bg-brand-700"
+                    <div className="space-y-3 bg-brand-50 p-4 rounded-xl border border-brand-200 animate-fade-in shadow-inner" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex items-center gap-2">
+                        <Clock size={16} className="text-brand-600" />
+                        <input 
+                          type="number" 
+                          min="0.5" 
+                          step="0.5"
+                          className="w-20 p-1.5 text-sm border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-bold"
+                          value={editHoursValue}
+                          onChange={(e) => setEditHoursValue(Number(e.target.value))}
+                        />
+                        <span className="text-xs font-black text-brand-600 uppercase">h</span>
+                      </div>
+                      
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Update Service Description</label>
+                        <textarea 
+                          className="w-full p-2 text-xs border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-medium min-h-[70px] bg-white"
+                          value={editNotesValue}
+                          onChange={(e) => setEditNotesValue(e.target.value)}
+                          placeholder="Update shift instructions..."
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          onClick={() => handleUpdateSchedule(schedule.id)}
+                          className="flex-1 rounded-lg text-[10px] font-black shadow-sm"
                         >
-                          <Check size={14} />
-                        </button>
-                        <button 
+                          {isLoading ? <Loader2 className="animate-spin" size={14}/> : <Check size={14} className="mr-1" />} SAVE
+                        </Button>
+                        <Button 
+                          size="sm" 
+                          variant="secondary"
                           onClick={() => setEditingScheduleId(null)}
-                          className="p-1.5 bg-gray-200 text-gray-600 rounded-lg hover:bg-gray-300"
+                          className="flex-1 rounded-lg text-[10px] font-black border-gray-200"
                         >
-                          <X size={14} />
-                        </button>
+                          <X size={14} className="mr-1" /> CANCEL
+                        </Button>
                       </div>
                     </div>
                   ) : (
-                    <div className="flex items-center space-x-2 font-black bg-gray-50 px-3 py-1.5 rounded-xl w-fit text-brand-600 text-[10px] uppercase tracking-widest border border-gray-100">
-                      <Clock size={14} />
-                      <span>{schedule.hoursPerDay} hours per shift</span>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-2 font-black bg-gray-50 px-3 py-1.5 rounded-xl w-fit text-brand-600 text-[10px] uppercase tracking-widest border border-gray-100">
+                        <Clock size={14} />
+                        <span>{schedule.hoursPerDay} hours</span>
+                      </div>
+                      <div className="flex items-center gap-1 text-[9px] font-black text-gray-300 uppercase opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Info size={12}/> View details
+                      </div>
                     </div>
                   )}
                 </div>
@@ -505,6 +549,65 @@ export const Agenda: React.FC = () => {
                  <p className="font-bold italic">No site locations registered yet.</p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Shift Detail Modal */}
+      {selectedShiftDetail && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={() => setSelectedShiftDetail(null)}>
+          <div className="bg-white w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-fade-in relative" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-brand-900 p-8 text-white">
+              <div className="flex justify-between items-start">
+                <div className="bg-white/10 p-3 rounded-2xl backdrop-blur-md mb-4">
+                   <Calendar size={28} className="text-white" />
+                </div>
+                <button onClick={() => setSelectedShiftDetail(null)} className="text-white/60 hover:text-white transition-colors">
+                  <X size={28} />
+                </button>
+              </div>
+              <h3 className="text-2xl font-black uppercase tracking-tight leading-tight">{selectedShiftDetail.locationName}</h3>
+              <p className="text-brand-300 font-bold uppercase text-[10px] tracking-[0.2em] mt-1">{DAYS[selectedShiftDetail.dayOfWeek]} Operations</p>
+            </div>
+            
+            <div className="p-8 space-y-6">
+              <div className="grid grid-cols-2 gap-4">
+                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Time Assigned</p>
+                    <div className="flex items-center gap-2 text-brand-600 font-black">
+                       <Clock size={16} /> {selectedShiftDetail.hoursPerDay} Hours
+                    </div>
+                 </div>
+                 <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Frequency</p>
+                    <div className="flex items-center gap-2 text-brand-600 font-black">
+                       <Calendar size={16} /> Weekly
+                    </div>
+                 </div>
+              </div>
+
+              <div className="space-y-1">
+                 <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Service Location</p>
+                 <div className="flex items-start gap-2">
+                    <MapPin className="text-brand-500 shrink-0 mt-1" size={18} />
+                    <p className="font-bold text-gray-700 leading-tight">{selectedShiftDetail.address}</p>
+                 </div>
+              </div>
+
+              <div className="space-y-3 bg-brand-50 p-6 rounded-3xl border border-brand-100">
+                 <div className="flex items-center gap-2">
+                    <FileText className="text-brand-600" size={18} />
+                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Service Instructions / Notes</p>
+                 </div>
+                 <p className="text-sm font-medium text-brand-800 leading-relaxed italic whitespace-pre-wrap">
+                    {selectedShiftDetail.notes || 'No specific instructions provided for this site.'}
+                 </p>
+              </div>
+
+              <Button fullWidth onClick={() => setSelectedShiftDetail(null)} className="h-14 rounded-2xl font-black tracking-tight text-lg shadow-xl">
+                 Got it, thanks!
+              </Button>
+            </div>
           </div>
         </div>
       )}
