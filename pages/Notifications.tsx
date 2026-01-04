@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
@@ -53,11 +54,37 @@ export const Notifications: React.FC = () => {
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
+  const loadData = async (showLoading = true) => {
+    if (!user) return;
+    if (showLoading) setIsLoading(true);
+    try {
+      if (activeTab === 'received') {
+        const data = await Database.getNotificationsForUser(user.id);
+        setNotifications(data);
+      } else {
+        const data = await Database.getSentNotifications(user.id);
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error("Error loading notifications data:", e);
+    } finally {
+      if (showLoading) setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadData();
     if (isAdmin) {
       loadUsers();
     }
+    
+    // Escuta por atualizações globais de notificações
+    const handleUpdate = () => loadData(false);
+    window.addEventListener('downey:notifications-updated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('downey:notifications-updated', handleUpdate);
+    };
   }, [user, activeTab]);
 
   useEffect(() => {
@@ -77,24 +104,6 @@ export const Notifications: React.FC = () => {
       setAllUsersList(filtered);
     } catch (e) {
       console.error("Error loading users for notification:", e);
-    }
-  };
-
-  const loadData = async () => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      if (activeTab === 'received') {
-        const data = await Database.getNotificationsForUser(user.id);
-        setNotifications(data);
-      } else {
-        const data = await Database.getSentNotifications(user.id);
-        setNotifications(data);
-      }
-    } catch (e) {
-      console.error("Error loading notifications data:", e);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -150,19 +159,20 @@ export const Notifications: React.FC = () => {
     if (!user || activeTab === 'sent') return;
     
     const notif = notifications.find(n => n.id === id);
-    if (notif && !notif.readBy.includes(user.id)) {
+    const readBy = Array.isArray(notif?.readBy) ? notif!.readBy : [];
+    
+    if (notif && !readBy.includes(user.id)) {
       try {
         // Optimistic update for UI responsiveness
         setNotifications(prev => prev.map(n => 
-          n.id === id ? { ...n, readBy: [...n.readBy, user.id] } : n
+          n.id === id ? { ...n, readBy: [...readBy, user.id] } : n
         ));
         
         // Update database
         await Database.markNotificationAsRead(id, user.id);
       } catch (e) {
         console.error("Error marking as read:", e);
-        // On error, we could re-load the data to sync with the actual state
-        loadData();
+        loadData(false);
       }
     }
   };
@@ -347,7 +357,8 @@ export const Notifications: React.FC = () => {
 
           <div className="space-y-4">
             {notifications.map((notif) => {
-              const isRead = notif.readBy.includes(user?.id || '');
+              const readBy = Array.isArray(notif.readBy) ? notif.readBy : [];
+              const isRead = readBy.includes(user?.id || '');
               const isGlobal = notif.recipientId === 'all';
               const isMySent = notif.senderId === user?.id;
               const isUnread = !isRead && activeTab === 'received';

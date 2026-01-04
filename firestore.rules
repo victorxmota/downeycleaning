@@ -3,21 +3,26 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Função para verificar se o usuário é admin
+    // Function to check if the user is an admin
     function isAdmin() {
       return request.auth != null && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
     }
     
-    // Função para verificar se o documento pertence ao usuário autenticado
-    function isOwner(userId) {
-      return request.auth != null && request.auth.uid == userId;
+    // Function to check if the user is the recipient of the notification
+    function isRecipient(notifData) {
+      return request.auth != null && (notifData.recipientId == request.auth.uid || notifData.recipientId == 'all');
+    }
+
+    // Function to check if the user is the sender of the notification
+    function isSender(notifData) {
+      return request.auth != null && notifData.senderId == request.auth.uid;
     }
 
     match /users/{userId} {
       allow read: if request.auth != null;
-      allow write: if isOwner(userId) || isAdmin();
+      allow write: if (request.auth != null && request.auth.uid == userId) || isAdmin();
     }
 
     match /offices/{officeId} {
@@ -31,24 +36,20 @@ service cloud.firestore {
     }
 
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && (
-        isAdmin() || 
-        resource.data.recipientId == request.auth.uid || 
-        resource.data.recipientId == 'all' ||
-        resource.data.senderId == request.auth.uid
-      );
+      allow read: if request.auth != null && (isAdmin() || isRecipient(resource.data) || isSender(resource.data));
       
       allow create: if isAdmin();
-      allow update: if request.auth != null;
       
-      // Admin pode excluir qualquer uma, remetente pode excluir a sua própria
-      allow delete: if isAdmin() || (request.auth != null && resource.data.senderId == request.auth.uid);
+      // Allow any recipient or admin to update the readBy field
+      allow update: if request.auth != null && (isAdmin() || isRecipient(resource.data));
+      
+      allow delete: if isAdmin() || (request.auth != null && isSender(resource.data));
     }
 
     match /records/{recordId} {
       allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow create: if request.auth != null;
-      allow update: if isAdmin() || (request.auth != null && (resource == null || resource.data.userId == request.auth.uid));
+      allow update: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow delete: if isAdmin();
     }
   }
