@@ -1,4 +1,3 @@
-
 import { 
   collection, 
   doc, 
@@ -9,26 +8,35 @@ import {
   updateDoc, 
   deleteDoc, 
   query, 
-  where
+  where,
+  orderBy,
+  limit,
+  arrayUnion
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./firebase";
 import type { FirebaseUser } from "./firebase";
-import { User, UserRole, ScheduleItem, TimeRecord, Office } from "../types";
-import { GoogleGenAI } from "@google/genai";
+import { User, UserRole, ScheduleItem, TimeRecord, Office, AppNotification } from "../types";
 
 const USERS_COL = 'users';
 const SCHEDULES_COL = 'schedules';
 const OFFICES_COL = 'offices';
 const RECORDS_COL = 'records';
+const NOTIFICATIONS_COL = 'notifications';
 
 const ADMIN_EMAIL = 'adminreports@downeycleaning.ie';
+
+// Helper to notify other components of notification changes
+const notifyNotificationChange = () => {
+  window.dispatchEvent(new CustomEvent('downey:notifications-updated'));
+};
 
 const sanitizeData = (data: any) => {
   const clean: any = {};
   Object.keys(data).forEach(key => {
-    if (data[key] === undefined) {
-      clean[key] = null;
+    if (data[key] === undefined || data[key] === null) {
+      if (key === 'readBy') clean[key] = [];
+      else if (key === 'recipientId') clean[key] = 'all';
     } else if (typeof data[key] === 'object' && data[key] !== null && !Array.isArray(data[key])) {
       clean[key] = sanitizeData(data[key]);
     } else {
@@ -87,7 +95,91 @@ export const Database = {
   getAllUsers: async (): Promise<User[]> => {
     const q = query(collection(db, USERS_COL));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => doc.data() as User);
+    return querySnapshot.docs.map(doc => ({
+      ...doc.data(),
+      id: doc.id
+    } as User));
+  },
+
+  sendNotification: async (notification: Omit<AppNotification, 'id'>) => {
+    try {
+      const dataToSave = {
+        senderId: notification.senderId,
+        senderName: notification.senderName,
+        recipientId: notification.recipientId || 'all',
+        title: notification.title.trim(),
+        message: notification.message.trim(),
+        createdAt: notification.createdAt || new Date().toISOString(),
+        readBy: []
+      };
+
+      const docRef = await addDoc(collection(db, NOTIFICATIONS_COL), dataToSave);
+      notifyNotificationChange();
+      return docRef;
+    } catch (error: any) {
+      console.error("Database: Erro ao gravar notificação:", error);
+      throw error;
+    }
+  },
+
+  getNotificationsForUser: async (userId: string): Promise<AppNotification[]> => {
+    if (!userId) return [];
+    try {
+      const q = query(
+        collection(db, NOTIFICATIONS_COL), 
+        where("recipientId", "in", [userId, "all"]),
+        limit(50)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs
+        .map(doc => ({ ...doc.data() as any, id: doc.id } as AppNotification))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch (error) {
+      console.error("Database: Erro ao buscar notificações recebidas:", error);
+      return [];
+    }
+  },
+
+  getSentNotifications: async (adminId: string): Promise<AppNotification[]> => {
+    try {
+      const q = query(
+        collection(db, NOTIFICATIONS_COL),
+        where("senderId", "==", adminId),
+        limit(50)
+      );
+      const querySnapshot = await getDocs(q);
+      return querySnapshot.docs
+        .map(doc => ({ ...doc.data() as any, id: doc.id } as AppNotification))
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    } catch (error) {
+      console.error("Database: Erro ao buscar notificações enviadas:", error);
+      return [];
+    }
+  },
+
+  markNotificationAsRead: async (notificationId: string, userId: string) => {
+    if (!userId || !notificationId) return;
+    try {
+      const docRef = doc(db, NOTIFICATIONS_COL, notificationId);
+      await updateDoc(docRef, {
+        readBy: arrayUnion(userId)
+      });
+      notifyNotificationChange();
+    } catch (error) {
+      console.error("Database: Error marking notification as read:", error);
+      throw error;
+    }
+  },
+
+  deleteNotification: async (id: string) => {
+    try {
+      const docRef = doc(db, NOTIFICATIONS_COL, id);
+      await deleteDoc(docRef);
+      notifyNotificationChange();
+    } catch (error: any) {
+      console.error("Database: Erro ao excluir notificação:", error);
+      throw error;
+    }
   },
 
   getSchedulesByUser: async (userId: string): Promise<ScheduleItem[]> => {
@@ -196,24 +288,5 @@ export const Database = {
     const storageRef = ref(storage, path);
     const snapshot = await uploadBytes(storageRef, file);
     return await getDownloadURL(snapshot.ref);
-  },
-
-  resolveEircode: async (eircode: string): Promise<string | null> => {
-    if (!eircode || eircode.length < 7) return null;
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    try {
-      const response = await ai.models.generateContent({
-        model: 'gemini-2.5-flash',
-        contents: `Find the complete address for the Irish Eircode: ${eircode}. Return only the address string. If not found, return 'not found'.`,
-        config: {
-          tools: [{ googleMaps: {} }],
-        },
-      });
-      const result = response.text?.trim() || '';
-      return result.toLowerCase().includes('not found') ? null : result;
-    } catch (e) {
-      console.error("Error resolving Eircode using Google Maps grounding:", e);
-      return null;
-    }
   }
 };

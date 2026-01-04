@@ -5,7 +5,7 @@ import { Database } from '../services/database';
 import { ScheduleItem, UserRole, User, Office } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2, FileText, Info, Search } from 'lucide-react';
+import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2, FileText, Info } from 'lucide-react';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -17,17 +17,19 @@ export const Agenda: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>(user?.id || '');
   const [isLoading, setIsLoading] = useState(false);
-  const [isSearchingEircode, setIsSearchingEircode] = useState(false);
   
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingOffice, setIsAddingOffice] = useState(false);
   
+  // Selected shift for detailed modal
   const [selectedShiftDetail, setSelectedShiftDetail] = useState<ScheduleItem | null>(null);
 
+  // States for editing a specific schedule
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editHoursValue, setEditHoursValue] = useState<number>(0);
   const [editNotesValue, setEditNotesValue] = useState<string>('');
 
+  // New Office form state
   const [newOffice, setNewOffice] = useState<Partial<Office>>({
     name: '',
     eircode: '',
@@ -83,24 +85,6 @@ export const Agenda: React.FC = () => {
     setIsLoading(false);
   };
 
-  const handleEircodeLookup = async () => {
-    if (!newOffice.eircode || newOffice.eircode.length < 7) return;
-    
-    setIsSearchingEircode(true);
-    try {
-      const address = await Database.resolveEircode(newOffice.eircode);
-      if (address) {
-        setNewOffice(prev => ({ ...prev, address }));
-      } else {
-        alert("Eircode not found or address unavailable.");
-      }
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setIsSearchingEircode(false);
-    }
-  };
-
   const calculateWeeklyHours = () => {
     return schedules.reduce((acc, curr) => acc + curr.hoursPerDay, 0);
   };
@@ -149,7 +133,7 @@ export const Agenda: React.FC = () => {
       setSelectedDays([]);
     } catch (e) {
       console.error(e);
-      alert("Error adding shift.");
+      alert("Error adding schedule.");
     } finally {
       setIsLoading(false);
     }
@@ -174,14 +158,14 @@ export const Agenda: React.FC = () => {
       setNewOffice({ name: '', eircode: '', address: '' });
     } catch (e) {
       console.error(e);
-      alert("Error adding location.");
+      alert("Error adding office.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeleteOffice = async (id: string) => {
-    if (window.confirm('Delete this service location?')) {
+    if (window.confirm('Delete this site location?')) {
       setIsLoading(true);
       await Database.deleteOffice(id);
       const allOffices = await Database.getOffices();
@@ -202,14 +186,14 @@ export const Agenda: React.FC = () => {
       setEditingScheduleId(null);
     } catch (e) {
       console.error(e);
-      alert("Failed to update shift.");
+      alert("Failed to update schedule.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeleteSchedule = async (id: string) => {
-    if (window.confirm('Are you sure you want to remove this shift?')) {
+    if (window.confirm('Are you sure you want to remove this schedule?')) {
       setIsLoading(true);
       await Database.deleteSchedule(id);
       const targetUserId = isAdmin ? selectedUser : user?.id;
@@ -247,8 +231,8 @@ export const Agenda: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">{viewMode === 'agenda' ? 'Work Schedule' : 'Manage Offices'}</h2>
-          <p className="text-gray-500">{viewMode === 'agenda' ? 'Plan and manage cleaning operational shifts' : 'Configure official service locations'}</p>
+          <h2 className="text-2xl font-bold text-gray-800">{viewMode === 'agenda' ? 'Work Schedule' : 'Manage Locations'}</h2>
+          <p className="text-gray-500">{viewMode === 'agenda' ? 'Plan and manage operational cleaning shifts' : 'Configure official service sites'}</p>
         </div>
         
         <div className="flex flex-wrap gap-2 items-center">
@@ -260,17 +244,17 @@ export const Agenda: React.FC = () => {
                   className="rounded-xl font-bold border-brand-600 text-brand-600"
                 >
                   {viewMode === 'agenda' ? <Building2 size={18} className="mr-2" /> : <Calendar size={18} className="mr-2" />}
-                  {viewMode === 'agenda' ? 'Manage Locations' : 'View Schedule'}
+                  {viewMode === 'agenda' ? 'Manage Sites' : 'View Schedule'}
                 </Button>
                 {viewMode === 'agenda' && (
                   <div className="flex flex-col mr-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">View Employee</span>
+                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Employee View</span>
                     <select 
                       className="border rounded-xl px-3 py-2 bg-white text-sm font-bold border-gray-200 outline-none focus:ring-2 focus:ring-brand-500"
                       value={selectedUser}
                       onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
                     >
-                      <option value={user?.id}>My Schedule</option>
+                      <option value={user?.id}>My Own Agenda</option>
                       {users.map(u => (
                         <option key={u.id} value={u.id}>{u.name}</option>
                       ))}
@@ -292,7 +276,7 @@ export const Agenda: React.FC = () => {
                     className={`${isAddingOffice ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
                   >
                     {isAddingOffice ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
-                    {isAddingOffice ? 'Cancel' : 'New Location'}
+                    {isAddingOffice ? 'Cancel' : 'New Site'}
                   </Button>
                 )}
               </>
@@ -323,41 +307,41 @@ export const Agenda: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Employee</label>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Assign To Employee</label>
                   <select 
                     className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                     value={selectedUser}
                     onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
                   >
-                    <option value={user?.id}>Assign to me</option>
+                    <option value={user?.id}>Assign to myself</option>
                     {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
                   </select>
                 </div>
 
                 {offices.length > 0 && (
                   <div className="md:col-span-2">
-                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Quick Location Selection</label>
+                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Quick Select Location</label>
                      <select 
                         className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleOfficeSelectForSchedule(e.target.value)}
                      >
-                       <option value="">-- Select Registered Office --</option>
+                       <option value="">-- Select Registered Site --</option>
                        {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                      </select>
                   </div>
                 )}
 
                 <Input 
-                  label="Location Name" 
-                  placeholder="Ex: Downey Tech Hub"
+                  label="Site Name" 
+                  placeholder="e.g. Downey Tech Hub"
                   labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
                   value={newSchedule.locationName || ''} 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, locationName: e.target.value})} 
                   className="bg-slate-800 border-slate-700 placeholder:text-slate-500 font-bold rounded-xl" 
                 />
                 <Input 
-                  label="Detailed Address" 
-                  placeholder="Street Example, 123"
+                  label="Address Detail" 
+                  placeholder="123 Street Ave, D02"
                   labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
                   value={newSchedule.address || ''} 
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewSchedule({...newSchedule, address: e.target.value})} 
@@ -365,7 +349,7 @@ export const Agenda: React.FC = () => {
                 />
 
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Notes / Instructions</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Description / Notes</label>
                   <textarea 
                     className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold min-h-[100px]"
                     placeholder="Describe specific tasks for this shift..."
@@ -412,7 +396,7 @@ export const Agenda: React.FC = () => {
                 className="rounded-xl h-14 text-lg font-black shadow-xl relative z-10"
               >
                 {isLoading ? <Loader2 className="animate-spin mr-2"/> : <Save size={20} className="mr-2"/>} 
-                CONFIRM SCHEDULE
+                CONFIRM SHIFT
               </Button>
             </div>
           )}
@@ -471,7 +455,7 @@ export const Agenda: React.FC = () => {
                       </div>
                       
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Update Notes</label>
+                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Update Service Description</label>
                         <textarea 
                           className="w-full p-2 text-xs border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-medium min-h-[70px] bg-white"
                           value={editNotesValue}
@@ -515,7 +499,7 @@ export const Agenda: React.FC = () => {
             {schedules.length === 0 && !isAddingSchedule && (
               <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center gap-3">
                 <Calendar size={48} className="text-gray-200" />
-                <p className="italic font-bold text-sm uppercase tracking-widest">No operational shifts scheduled.</p>
+                <p className="italic font-bold text-sm uppercase tracking-widest">No operational shifts scheduled for this period.</p>
               </div>
             )}
           </div>
@@ -524,37 +508,15 @@ export const Agenda: React.FC = () => {
         <div className="space-y-6">
           {isAddingOffice && isAdmin && (
              <div className="bg-white p-6 rounded-2xl border border-brand-100 shadow-xl space-y-4 animate-fade-in">
-                <h3 className="font-black text-brand-900 uppercase tracking-widest border-b pb-2">New Service Location</h3>
+                <h3 className="font-black text-brand-900 uppercase tracking-widest border-b pb-2">Add New Service Site</h3>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                   <Input label="Location Name" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} />
-                   <div className="relative">
-                     <Input 
-                      label="Eircode (Postcode)" 
-                      value={newOffice.eircode} 
-                      onChange={e => setNewOffice({...newOffice, eircode: e.target.value})}
-                      onBlur={handleEircodeLookup}
-                      className="pr-10"
-                      placeholder="Ex: D02 X285"
-                     />
-                     <button 
-                        onClick={handleEircodeLookup}
-                        disabled={isSearchingEircode}
-                        className="absolute right-2 top-[34px] p-1.5 bg-brand-100 text-brand-600 rounded-lg hover:bg-brand-200 transition-all disabled:opacity-50"
-                        title="Search Address"
-                     >
-                       {isSearchingEircode ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-                     </button>
-                   </div>
-                   <Input 
-                    label="Full Address" 
-                    value={newOffice.address} 
-                    onChange={e => setNewOffice({...newOffice, address: e.target.value})}
-                    placeholder="Auto-filled via Eircode"
-                   />
+                   <Input label="Site Name" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} />
+                   <Input label="Eircode / ZIP" value={newOffice.eircode} onChange={e => setNewOffice({...newOffice, eircode: e.target.value})} />
+                   <Input label="Full Address" value={newOffice.address} onChange={e => setNewOffice({...newOffice, address: e.target.value})} />
                 </div>
                 <div className="flex gap-2">
                    <Button onClick={handleAddOffice} disabled={isLoading} className="font-bold">
-                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Save Location
+                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Save Site
                    </Button>
                    <Button variant="outline" onClick={() => setIsAddingOffice(false)} className="font-bold">Cancel</Button>
                 </div>
@@ -584,7 +546,7 @@ export const Agenda: React.FC = () => {
             ))}
             {offices.length === 0 && !isAddingOffice && (
               <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl">
-                 <p className="font-bold italic">No service locations registered.</p>
+                 <p className="font-bold italic">No site locations registered yet.</p>
               </div>
             )}
           </div>
@@ -605,13 +567,13 @@ export const Agenda: React.FC = () => {
                 </button>
               </div>
               <h3 className="text-2xl font-black uppercase tracking-tight leading-tight">{selectedShiftDetail.locationName}</h3>
-              <p className="text-brand-300 font-bold uppercase text-[10px] tracking-[0.2em] mt-1">Operations: {DAYS[selectedShiftDetail.dayOfWeek]}</p>
+              <p className="text-brand-300 font-bold uppercase text-[10px] tracking-[0.2em] mt-1">{DAYS[selectedShiftDetail.dayOfWeek]} Operations</p>
             </div>
             
             <div className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Assigned Time</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Time Assigned</p>
                     <div className="flex items-center gap-2 text-brand-600 font-black">
                        <Clock size={16} /> {selectedShiftDetail.hoursPerDay} Hours
                     </div>
@@ -635,15 +597,15 @@ export const Agenda: React.FC = () => {
               <div className="space-y-3 bg-brand-50 p-6 rounded-3xl border border-brand-100">
                  <div className="flex items-center gap-2">
                     <FileText className="text-brand-600" size={18} />
-                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Instructions / Notes</p>
+                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Service Instructions / Notes</p>
                  </div>
                  <p className="text-sm font-medium text-brand-800 leading-relaxed italic whitespace-pre-wrap">
-                    {selectedShiftDetail.notes || 'No specific instructions provided for this location.'}
+                    {selectedShiftDetail.notes || 'No specific instructions provided for this site.'}
                  </p>
               </div>
 
               <Button fullWidth onClick={() => setSelectedShiftDetail(null)} className="h-14 rounded-2xl font-black tracking-tight text-lg shadow-xl">
-                 Got it!
+                 Got it, thanks!
               </Button>
             </div>
           </div>

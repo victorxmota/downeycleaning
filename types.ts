@@ -14,6 +14,17 @@ export interface User {
   password?: string;
 }
 
+export interface AppNotification {
+  id: string;
+  senderId: string;
+  senderName: string;
+  recipientId: string; // 'all' para todos ou ID do usuário específico
+  title: string;
+  message: string;
+  createdAt: string;
+  readBy: string[]; // Lista de IDs de usuários que leram
+}
+
 export interface ScheduleItem {
   id: string;
   userId: string;

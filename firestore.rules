@@ -3,38 +3,48 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
-    // Auxiliary function to check if the user is an admin
+    // Função para verificar se o usuário é admin
     function isAdmin() {
       return request.auth != null && 
         exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'ADMIN';
     }
     
-    // Auxiliary function to check if the document belongs to the logged-in user
+    // Função para verificar se o documento pertence ao usuário autenticado
     function isOwner(userId) {
       return request.auth != null && request.auth.uid == userId;
     }
 
-    // Rules for Users collection
     match /users/{userId} {
       allow read: if request.auth != null;
-      // prioritize isOwner for registration flow
       allow write: if isOwner(userId) || isAdmin();
     }
 
-    // Rules for Offices collection
     match /offices/{officeId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
 
-    // Rules for Schedules collection
     match /schedules/{scheduleId} {
       allow read: if request.auth != null;
       allow write: if isAdmin();
     }
 
-    // Rules for Time Records (Records)
+    match /notifications/{notificationId} {
+      allow read: if request.auth != null && (
+        isAdmin() || 
+        resource.data.recipientId == request.auth.uid || 
+        resource.data.recipientId == 'all' ||
+        resource.data.senderId == request.auth.uid
+      );
+      
+      allow create: if isAdmin();
+      allow update: if request.auth != null;
+      
+      // Admin pode excluir qualquer uma, remetente pode excluir a sua própria
+      allow delete: if isAdmin() || (request.auth != null && resource.data.senderId == request.auth.uid);
+    }
+
     match /records/{recordId} {
       allow read: if isAdmin() || (request.auth != null && resource.data.userId == request.auth.uid);
       allow create: if request.auth != null;
