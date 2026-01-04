@@ -123,22 +123,23 @@ export const Agenda: React.FC = () => {
       return;
     }
 
-    // Step 1: Handle API Key selection if required by the environment
     const aistudio = (window as any).aistudio;
+    
+    // Check if API key has been selected using AI Studio helpers
     if (aistudio && typeof aistudio.hasSelectedApiKey === 'function') {
       const hasKey = await aistudio.hasSelectedApiKey();
       if (!hasKey) {
+        alert("To perform automated searches, please select your paid API key in the following dialog.");
         await aistudio.openSelectKey();
-        // Proceeding assuming selection attempt was made as per guidelines
       }
     }
 
     setIsSearchingAddress(true);
     try {
-      // Step 2: Create a new instance right before making an API call
+      // Create fresh instance before call
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Step 3: Attempt to get current location for better Maps grounding
+      // Get location for better Maps grounding if available
       let latLng = undefined;
       try {
         const position: any = await new Promise((resolve, reject) => {
@@ -149,13 +150,13 @@ export const Agenda: React.FC = () => {
           longitude: position.coords.longitude
         };
       } catch (geoError) {
-        console.debug("Geolocation not available for grounding, proceeding with text context only.");
+        console.debug("Geolocation not available for grounding, proceeding with text only.");
       }
 
-      // Step 4: Call Gemini 2.5 series model (required for Google Maps tool)
+      // Use the correct 2.5 series model that supports Google Maps tool
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash-native-audio-preview-09-2025",
-        contents: `Find the full, standard physical address for the Irish Eircode: ${newOffice.eircode}. Return ONLY the physical address string without any additional text.`,
+        model: "gemini-2.5-flash",
+        contents: `Find the full, physical address for the Irish Eircode: ${newOffice.eircode}. Return ONLY the address string without any additional context or markdown.`,
         config: {
           tools: [{ googleMaps: {} }],
           toolConfig: latLng ? {
@@ -168,17 +169,17 @@ export const Agenda: React.FC = () => {
       if (address) {
         setNewOffice(prev => ({ ...prev, address }));
       } else {
-        alert("Could not find an address for this Eircode. Please enter manually.");
+        alert("No address found for this Eircode. Please enter it manually.");
       }
     } catch (error: any) {
-      console.error("Eircode search error:", error);
+      console.error("Eircode Search Error:", error);
       
-      // Handle the case where the API key might be invalid or project not found
       if (error.message?.includes("Requested entity was not found") && aistudio) {
+        alert("There was an issue with the API Key selection. Please ensure you select a key from a paid GCP project.");
         await aistudio.openSelectKey();
+      } else {
+        alert("Address search failed. Please check your Eircode or enter manually. Ensure your API Key has Google Maps grounding enabled.");
       }
-      
-      alert("Address search failed. Please ensure your Eircode is correct or enter the address manually. Note: You may need a valid API key with Billing enabled.");
     } finally {
       setIsSearchingAddress(false);
     }
@@ -186,7 +187,7 @@ export const Agenda: React.FC = () => {
 
   const handleAddSchedule = async () => {
     if (!newSchedule.locationName || !newSchedule.address) {
-      alert("Location and Address are required");
+      alert("Location name and address are required");
       return;
     }
     if (selectedDays.length === 0) {
@@ -245,14 +246,14 @@ export const Agenda: React.FC = () => {
       setNewOffice({ name: '', eircode: '', address: '' });
     } catch (e) {
       console.error(e);
-      alert("Error adding office.");
+      alert("Error adding location.");
     } finally {
       setIsLoading(false);
     }
   };
 
   const handleDeleteOffice = async (id: string) => {
-    if (window.confirm('Delete this site location?')) {
+    if (window.confirm('Delete this service site?')) {
       setIsLoading(true);
       await Database.deleteOffice(id);
       const allOffices = await Database.getOffices();
@@ -280,7 +281,7 @@ export const Agenda: React.FC = () => {
   };
 
   const handleDeleteSchedule = async (id: string) => {
-    if (window.confirm('Are you sure you want to remove this schedule?')) {
+    if (window.confirm('Are you sure you want to remove this shift?')) {
       setIsLoading(true);
       await Database.deleteSchedule(id);
       const targetUserId = isAdmin ? selectedUser : user?.id;
@@ -318,8 +319,8 @@ export const Agenda: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-800">{viewMode === 'agenda' ? 'Work Schedule' : 'Manage Locations'}</h2>
-          <p className="text-gray-500">{viewMode === 'agenda' ? 'Plan and manage operational cleaning shifts' : 'Configure official service sites'}</p>
+          <h2 className="text-2xl font-bold text-gray-800">{viewMode === 'agenda' ? 'Work Schedule' : 'Location Management'}</h2>
+          <p className="text-gray-500">{viewMode === 'agenda' ? 'Plan and manage operational shifts' : 'Configure official service sites'}</p>
         </div>
         
         <div className="flex flex-wrap gap-2 items-center">
@@ -355,7 +356,7 @@ export const Agenda: React.FC = () => {
                     className={`${isAddingSchedule ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
                   >
                     {isAddingSchedule ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
-                    {isAddingSchedule ? 'Cancel' : 'Add Shift'}
+                    {isAddingSchedule ? 'Cancel' : 'New Shift'}
                   </Button>
                 ) : (
                   <Button 
@@ -394,7 +395,7 @@ export const Agenda: React.FC = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
                 <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Assign To Employee</label>
+                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Target Personnel</label>
                   <select 
                     className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                     value={selectedUser}
@@ -407,12 +408,12 @@ export const Agenda: React.FC = () => {
 
                 {offices.length > 0 && (
                   <div className="md:col-span-2">
-                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Quick Select Location</label>
+                     <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Quick Select Registered Site</label>
                      <select 
                         className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
                         onChange={(e: React.ChangeEvent<HTMLSelectElement>) => handleOfficeSelectForSchedule(e.target.value)}
                      >
-                       <option value="">-- Select Registered Site --</option>
+                       <option value="">-- Select Site --</option>
                        {offices.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
                      </select>
                   </div>
@@ -436,10 +437,10 @@ export const Agenda: React.FC = () => {
                 />
 
                 <div className="md:col-span-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Service Description / Notes</label>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Shift Notes / Description</label>
                   <textarea 
                     className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold min-h-[100px]"
-                    placeholder="Describe specific tasks for this shift..."
+                    placeholder="Describe specific cleaning tasks..."
                     value={newSchedule.notes || ''}
                     onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setNewSchedule({...newSchedule, notes: e.target.value})}
                   />
@@ -447,7 +448,7 @@ export const Agenda: React.FC = () => {
               </div>
 
               <div className="relative z-10">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Days of Week (Multiple selection)</label>
+                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Service Days</label>
                 <div className="flex flex-wrap gap-2">
                    {DAYS.map((day, idx) => (
                      <button
@@ -465,7 +466,7 @@ export const Agenda: React.FC = () => {
 
               <div className="w-1/3 relative z-10">
                 <Input 
-                  label="Shift Duration (Hours)" 
+                  label="Duration (Hours)" 
                   type="number" 
                   min="0.5" 
                   step="0.5"
@@ -483,7 +484,7 @@ export const Agenda: React.FC = () => {
                 className="rounded-xl h-14 text-lg font-black shadow-xl relative z-10"
               >
                 {isLoading ? <Loader2 className="animate-spin mr-2"/> : <Save size={20} className="mr-2"/>} 
-                CONFIRM SHIFT
+                CONFIRM SHIFTS
               </Button>
             </div>
           )}
@@ -542,12 +543,12 @@ export const Agenda: React.FC = () => {
                       </div>
                       
                       <div className="space-y-1">
-                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Update Service Description</label>
+                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Update Notes</label>
                         <textarea 
                           className="w-full p-2 text-xs border border-brand-300 rounded-lg focus:ring-2 focus:ring-brand-500 outline-none font-medium min-h-[70px] bg-white"
                           value={editNotesValue}
                           onChange={(e) => setEditNotesValue(e.target.value)}
-                          placeholder="Update shift instructions..."
+                          placeholder="Updated instructions..."
                         />
                       </div>
 
@@ -586,7 +587,7 @@ export const Agenda: React.FC = () => {
             {schedules.length === 0 && !isAddingSchedule && (
               <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl flex flex-col items-center justify-center gap-3">
                 <Calendar size={48} className="text-gray-200" />
-                <p className="italic font-bold text-sm uppercase tracking-widest">No operational shifts scheduled for this period.</p>
+                <p className="italic font-bold text-sm uppercase tracking-widest">No operational shifts scheduled.</p>
               </div>
             )}
           </div>
@@ -600,14 +601,14 @@ export const Agenda: React.FC = () => {
                    <div className="bg-brand-50 p-2 rounded-xl text-brand-600">
                       <MapPinned size={20} />
                    </div>
-                   <h3 className="font-black text-brand-900 uppercase tracking-widest text-sm">Add New Service Site</h3>
+                   <h3 className="font-black text-brand-900 uppercase tracking-widest text-sm">Register New Service Site</h3>
                 </div>
                 
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                    <div className="md:col-span-1">
                       <Input 
                         label="Site Nickname" 
-                        placeholder="e.g. Headquarters"
+                        placeholder="e.g. Matriz"
                         value={newOffice.name} 
                         onChange={e => setNewOffice({...newOffice, name: e.target.value})} 
                         className="rounded-xl font-bold"
@@ -616,7 +617,7 @@ export const Agenda: React.FC = () => {
                    
                    <div className="md:col-span-1">
                       <div className="flex flex-col">
-                        <label className="block text-sm font-medium mb-1 text-gray-700">Eircode (Search)</label>
+                        <label className="block text-sm font-medium mb-1 text-gray-700">Eircode (Automated Search)</label>
                         <div className="flex gap-2">
                            <input
                               className="flex-1 rounded-xl shadow-sm border border-gray-300 p-2.5 transition-all focus:ring-2 focus:ring-brand-500 outline-none font-bold text-gray-900"
@@ -628,18 +629,18 @@ export const Agenda: React.FC = () => {
                               onClick={handleEircodeSearch} 
                               disabled={isSearchingAddress || !newOffice.eircode}
                               className="rounded-xl w-12 h-11 p-0 shrink-0 shadow-md"
-                              title="Search Address by Eircode"
+                              title="Search address by Eircode"
                            >
                               {isSearchingAddress ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
                            </Button>
                         </div>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-wider">Fast-fill using Google Maps</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-wider">Fast-fill using Google Maps grounding</p>
                       </div>
                    </div>
 
                    <div className="md:col-span-1">
                       <Input 
-                        label="Full Address (Manual or Auto)" 
+                        label="Full Address" 
                         placeholder="123 Street Name, Town..."
                         value={newOffice.address} 
                         onChange={e => setNewOffice({...newOffice, address: e.target.value})} 
@@ -650,7 +651,7 @@ export const Agenda: React.FC = () => {
 
                 <div className="flex gap-3 pt-4 border-t border-gray-50">
                    <Button onClick={handleAddOffice} disabled={isLoading} className="font-bold rounded-xl h-12 px-8 shadow-lg">
-                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Confirm Site Registration
+                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Confirm Registration
                    </Button>
                    <Button variant="outline" onClick={() => setIsAddingOffice(false)} className="font-bold rounded-xl h-12 px-6 border-gray-200">Cancel</Button>
                 </div>
@@ -680,7 +681,7 @@ export const Agenda: React.FC = () => {
             ))}
             {offices.length === 0 && !isAddingOffice && (
               <div className="col-span-full py-20 text-center text-gray-400 bg-white border-2 border-dashed border-gray-100 rounded-2xl">
-                 <p className="font-bold italic">No site locations registered yet.</p>
+                 <p className="font-bold italic">No locations registered.</p>
               </div>
             )}
           </div>
@@ -707,13 +708,13 @@ export const Agenda: React.FC = () => {
             <div className="p-8 space-y-6">
               <div className="grid grid-cols-2 gap-4">
                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Time Assigned</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Estimated Duration</p>
                     <div className="flex items-center gap-2 text-brand-600 font-black">
                        <Clock size={16} /> {selectedShiftDetail.hoursPerDay} Hours
                     </div>
                  </div>
                  <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
-                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Frequency</p>
+                    <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Recurrence</p>
                     <div className="flex items-center gap-2 text-brand-600 font-black">
                        <Calendar size={16} /> Weekly
                     </div>
@@ -731,7 +732,7 @@ export const Agenda: React.FC = () => {
               <div className="space-y-3 bg-brand-50 p-6 rounded-3xl border border-brand-100">
                  <div className="flex items-center gap-2">
                     <FileText className="text-brand-600" size={18} />
-                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Service Instructions / Notes</p>
+                    <p className="text-[10px] font-black text-brand-900 uppercase tracking-widest">Service Instructions</p>
                  </div>
                  <p className="text-sm font-medium text-brand-800 leading-relaxed italic whitespace-pre-wrap">
                     {selectedShiftDetail.notes || 'No specific instructions provided for this site.'}
