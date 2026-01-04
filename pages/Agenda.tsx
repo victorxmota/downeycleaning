@@ -5,7 +5,26 @@ import { Database } from '../services/database';
 import { ScheduleItem, UserRole, User, Office } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
-import { Trash2, Calendar, Clock, MapPin, Save, X, CheckSquare, Square, Loader2, Edit2, Check, Plus, Building2, FileText, Info } from 'lucide-react';
+import { 
+  Trash2, 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Save, 
+  X, 
+  CheckSquare, 
+  Square, 
+  Loader2, 
+  Edit2, 
+  Check, 
+  Plus, 
+  Building2, 
+  FileText, 
+  Info,
+  Search,
+  MapPinned
+} from 'lucide-react';
+import { GoogleGenAI } from "@google/genai";
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -17,6 +36,7 @@ export const Agenda: React.FC = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [selectedUser, setSelectedUser] = useState<string>(user?.id || '');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSearchingAddress, setIsSearchingAddress] = useState(false);
   
   const [isAddingSchedule, setIsAddingSchedule] = useState(false);
   const [isAddingOffice, setIsAddingOffice] = useState(false);
@@ -95,6 +115,37 @@ export const Agenda: React.FC = () => {
         ? prev.filter(d => d !== dayIndex) 
         : [...prev, dayIndex]
     );
+  };
+
+  const handleEircodeSearch = async () => {
+    if (!newOffice.eircode || newOffice.eircode.trim().length < 3) {
+      alert("Please enter a valid Eircode first.");
+      return;
+    }
+
+    setIsSearchingAddress(true);
+    try {
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: `Find the full, standard physical address for the Irish Eircode: ${newOffice.eircode}. Return only the address string.`,
+        config: {
+          tools: [{ googleMaps: {} }],
+        },
+      });
+
+      const address = response.text?.trim();
+      if (address) {
+        setNewOffice(prev => ({ ...prev, address }));
+      } else {
+        alert("Could not find an address for this Eircode. Please enter manually.");
+      }
+    } catch (error) {
+      console.error("Eircode search error:", error);
+      alert("Service temporarily unavailable. Please enter the address manually.");
+    } finally {
+      setIsSearchingAddress(false);
+    }
   };
 
   const handleAddSchedule = async () => {
@@ -507,18 +558,65 @@ export const Agenda: React.FC = () => {
       ) : (
         <div className="space-y-6">
           {isAddingOffice && isAdmin && (
-             <div className="bg-white p-6 rounded-2xl border border-brand-100 shadow-xl space-y-4 animate-fade-in">
-                <h3 className="font-black text-brand-900 uppercase tracking-widest border-b pb-2">Add New Service Site</h3>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                   <Input label="Site Name" value={newOffice.name} onChange={e => setNewOffice({...newOffice, name: e.target.value})} />
-                   <Input label="Eircode / ZIP" value={newOffice.eircode} onChange={e => setNewOffice({...newOffice, eircode: e.target.value})} />
-                   <Input label="Full Address" value={newOffice.address} onChange={e => setNewOffice({...newOffice, address: e.target.value})} />
+             <div className="bg-white p-6 rounded-2xl border border-brand-100 shadow-xl space-y-6 animate-fade-in relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-2 h-full bg-brand-600" />
+                <div className="flex items-center gap-3 border-b border-gray-100 pb-4">
+                   <div className="bg-brand-50 p-2 rounded-xl text-brand-600">
+                      <MapPinned size={20} />
+                   </div>
+                   <h3 className="font-black text-brand-900 uppercase tracking-widest text-sm">Add New Service Site</h3>
                 </div>
-                <div className="flex gap-2">
-                   <Button onClick={handleAddOffice} disabled={isLoading} className="font-bold">
-                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Save Site
+                
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                   <div className="md:col-span-1">
+                      <Input 
+                        label="Site Nickname" 
+                        placeholder="e.g. Headquarters"
+                        value={newOffice.name} 
+                        onChange={e => setNewOffice({...newOffice, name: e.target.value})} 
+                        className="rounded-xl font-bold"
+                      />
+                   </div>
+                   
+                   <div className="md:col-span-1">
+                      <div className="flex flex-col">
+                        <label className="block text-sm font-medium mb-1 text-gray-700">Eircode (Search)</label>
+                        <div className="flex gap-2">
+                           <input
+                              className="flex-1 rounded-xl shadow-sm border border-gray-300 p-2.5 transition-all focus:ring-2 focus:ring-brand-500 outline-none font-bold text-gray-900"
+                              placeholder="e.g. D02 XH22"
+                              value={newOffice.eircode}
+                              onChange={e => setNewOffice({...newOffice, eircode: e.target.value.toUpperCase()})}
+                           />
+                           <Button 
+                              onClick={handleEircodeSearch} 
+                              disabled={isSearchingAddress || !newOffice.eircode}
+                              className="rounded-xl w-12 h-11 p-0 shrink-0 shadow-md"
+                              title="Search Address by Eircode"
+                           >
+                              {isSearchingAddress ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+                           </Button>
+                        </div>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1 tracking-wider">Fast-fill using Google Maps</p>
+                      </div>
+                   </div>
+
+                   <div className="md:col-span-1">
+                      <Input 
+                        label="Full Address (Manual or Auto)" 
+                        placeholder="123 Street Name, Town..."
+                        value={newOffice.address} 
+                        onChange={e => setNewOffice({...newOffice, address: e.target.value})} 
+                        className="rounded-xl font-bold"
+                      />
+                   </div>
+                </div>
+
+                <div className="flex gap-3 pt-4 border-t border-gray-50">
+                   <Button onClick={handleAddOffice} disabled={isLoading} className="font-bold rounded-xl h-12 px-8 shadow-lg">
+                      {isLoading ? <Loader2 className="animate-spin mr-2" /> : <Save size={18} className="mr-2" />} Confirm Site Registration
                    </Button>
-                   <Button variant="outline" onClick={() => setIsAddingOffice(false)} className="font-bold">Cancel</Button>
+                   <Button variant="outline" onClick={() => setIsAddingOffice(false)} className="font-bold rounded-xl h-12 px-6 border-gray-200">Cancel</Button>
                 </div>
              </div>
           )}
