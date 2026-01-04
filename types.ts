@@ -96,17 +96,17 @@ export interface TimeRecord {
   scheduleId?: string;
   locationName: string;
   startTime: string;
-  endTime?: string;
+  endTime?: string | null;
   date: string;
   safetyChecklist: SafetyChecklist;
-  photoUrl?: string;
-  endPhotoUrl?: string;
+  photoUrl?: string | null;
+  endPhotoUrl?: string | null;
   startLocation?: GeoLocation;
   endLocation?: GeoLocation;
   notes?: string;
   // Pause features
   isPaused?: boolean;
-  pausedAt?: string;
+  pausedAt?: string | null;
   totalPausedMs?: number;
 }
 
