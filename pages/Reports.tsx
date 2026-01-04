@@ -24,8 +24,8 @@ import {
   ShieldCheck,
   Trash2,
   TrendingUp,
-  Trash,
-  AlertTriangle
+  AlertTriangle,
+  AlertCircle
 } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -98,6 +98,9 @@ export const Reports: React.FC = () => {
   const [editLocation, setEditLocation] = useState('');
   const [editHours, setEditHours] = useState<number>(0);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Custom Confirmation Modal State
+  const [itemToDelete, setItemToDelete] = useState<string | null>(null);
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
@@ -142,25 +145,6 @@ export const Reports: React.FC = () => {
       loadData(selectedUserFilter);
     }
   }, [selectedUserFilter]);
-
-  useEffect(() => {
-    const fetchEmployeeSchedules = async () => {
-      const targetUserId = isAdmin ? manualData.userId : user?.id;
-      if (isAddingManual && targetUserId) {
-        try {
-          const schedules = await Database.getSchedulesByUser(targetUserId);
-          const uniqueLocs = Array.from(new Set(schedules.map(s => s.locationName)));
-          setEmployeeLocations(uniqueLocs);
-          if (!isManualLocationEntry && uniqueLocs.length > 0 && !uniqueLocs.includes(manualData.locationName)) {
-            setManualData(prev => ({ ...prev, locationName: uniqueLocs[0] }));
-          } else if (uniqueLocs.length === 0) {
-            setIsManualLocationEntry(true);
-          }
-        } catch (e) {}
-      }
-    };
-    fetchEmployeeSchedules();
-  }, [manualData.userId, isAddingManual, isAdmin, user?.id]);
 
   useEffect(() => {
     let result = [...records];
@@ -296,14 +280,28 @@ export const Reports: React.FC = () => {
     }
   };
 
-  const handleDeleteRecord = async (id: string) => {
-    if (!window.confirm("Are you sure you want to permanently delete this shift record?")) return;
-    setIsUpdating(true);
+  const handleConfirmDelete = async () => {
+    if (!itemToDelete) return;
+    
+    // Save previous state for potential rollback
+    const previousRecords = [...records];
+    const idToDelete = itemToDelete;
+    
+    // Clear modal state
+    setItemToDelete(null);
+    
+    // Optimistic UI: Remove from local state immediately
+    setRecords(prev => prev.filter(r => r.id !== idToDelete));
+    
     try {
-      await Database.deleteRecord(id);
-      await loadData(selectedUserFilter);
+      setIsUpdating(true);
+      await Database.deleteRecord(idToDelete);
+      // Success: record is already gone from state, UI will naturally re-render
     } catch (e) {
-      alert("Failed to delete record.");
+      console.error("Error deleting record:", e);
+      alert("Failed to delete the record from the database. Please check your connection.");
+      // Rollback UI update on failure
+      setRecords(previousRecords);
     } finally {
       setIsUpdating(false);
     }
@@ -503,7 +501,6 @@ export const Reports: React.FC = () => {
         </div>
       </div>
 
-      {/* Operational Hours Trend Chart Card */}
       <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
         <div className="flex items-center justify-between mb-6">
           <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest flex items-center gap-2">
@@ -682,8 +679,15 @@ export const Reports: React.FC = () => {
                                 <button onClick={() => startEditing(record)} className="text-brand-500 hover:scale-125 transition-transform" title="Edit Shift">
                                   <Edit2 size={18} />
                                 </button>
-                                <button onClick={() => handleDeleteRecord(record.id)} className="text-red-500 hover:scale-125 transition-transform" title="Delete Shift">
-                                  <Trash size={18} />
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setItemToDelete(record.id);
+                                  }} 
+                                  className="text-red-500 hover:scale-125 transition-transform" 
+                                  title="Delete Shift"
+                                >
+                                  <Trash2 size={18} />
                                 </button>
                               </>
                             )}
@@ -699,6 +703,41 @@ export const Reports: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Delete Confirmation Modal */}
+      {itemToDelete && (
+        <div className="fixed inset-0 bg-brand-900/80 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div className="bg-white max-w-sm w-full rounded-3xl p-8 shadow-2xl animate-shake border border-red-100">
+            <div className="w-16 h-16 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle size={32} className="text-red-600" />
+            </div>
+            <h3 className="text-xl font-black text-brand-900 text-center uppercase tracking-tight">Confirm Deletion</h3>
+            <p className="text-gray-500 text-center text-sm mt-3 font-medium">
+              Are you sure you want to permanently delete this shift record? This action cannot be undone.
+            </p>
+            <div className="flex gap-4 mt-8">
+              <Button 
+                variant="outline" 
+                fullWidth 
+                onClick={() => setItemToDelete(null)}
+                disabled={isUpdating}
+                className="rounded-2xl h-12 font-black"
+              >
+                Cancel
+              </Button>
+              <Button 
+                variant="danger" 
+                fullWidth 
+                onClick={handleConfirmDelete}
+                disabled={isUpdating}
+                className="rounded-2xl h-12 font-black bg-red-600 shadow-lg"
+              >
+                {isUpdating ? <Loader2 className="animate-spin" /> : 'Delete Shift'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
