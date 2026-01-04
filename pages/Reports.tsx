@@ -374,7 +374,7 @@ export const Reports: React.FC = () => {
     return (
       <div className="flex flex-col items-center justify-center p-20 gap-4">
         <Loader2 className="animate-spin text-brand-600" size={48}/>
-        <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Sincronizando Relatórios...</p>
+        <p className="text-gray-400 font-bold uppercase text-[10px] tracking-widest">Syncing Reports...</p>
       </div>
     );
   }

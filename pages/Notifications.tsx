@@ -78,7 +78,7 @@ export const Notifications: React.FC = () => {
       loadUsers();
     }
     
-    // Escuta por atualizações globais de notificações
+    // Listen for global notification updates
     const handleUpdate = () => loadData(false);
     window.addEventListener('downey:notifications-updated', handleUpdate);
     
@@ -119,7 +119,8 @@ export const Notifications: React.FC = () => {
     setIsSending(true);
 
     try {
-      const payload = {
+      // Fix: removed reference to newNotif.createdAt as it doesn't exist on the state object
+      const payload: Omit<AppNotification, 'id'> = {
         senderId: user.id,
         senderName: user.name,
         recipientId: newNotif.recipientId,
@@ -149,7 +150,7 @@ export const Notifications: React.FC = () => {
       }
       
     } catch (error: any) {
-      console.error("HandleSend: Erro capturado no componente:", error);
+      console.error("HandleSend: Error captured in component:", error);
       setIsSending(false);
       alert(error.message || "Failed to send notification.");
     }
