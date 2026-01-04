@@ -123,14 +123,44 @@ export const Agenda: React.FC = () => {
       return;
     }
 
+    // Step 1: Handle API Key selection if required by the environment
+    const aistudio = (window as any).aistudio;
+    if (aistudio && typeof aistudio.hasSelectedApiKey === 'function') {
+      const hasKey = await aistudio.hasSelectedApiKey();
+      if (!hasKey) {
+        await aistudio.openSelectKey();
+        // Proceeding assuming selection attempt was made as per guidelines
+      }
+    }
+
     setIsSearchingAddress(true);
     try {
+      // Step 2: Create a new instance right before making an API call
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      
+      // Step 3: Attempt to get current location for better Maps grounding
+      let latLng = undefined;
+      try {
+        const position: any = await new Promise((resolve, reject) => {
+          navigator.geolocation.getCurrentPosition(resolve, reject, { timeout: 3000 });
+        });
+        latLng = {
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude
+        };
+      } catch (geoError) {
+        console.debug("Geolocation not available for grounding, proceeding with text context only.");
+      }
+
+      // Step 4: Call Gemini 2.5 series model (required for Google Maps tool)
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
-        contents: `Find the full, standard physical address for the Irish Eircode: ${newOffice.eircode}. Return only the address string.`,
+        model: "gemini-2.5-flash-native-audio-preview-09-2025",
+        contents: `Find the full, standard physical address for the Irish Eircode: ${newOffice.eircode}. Return ONLY the physical address string without any additional text.`,
         config: {
           tools: [{ googleMaps: {} }],
+          toolConfig: latLng ? {
+            retrievalConfig: { latLng }
+          } : undefined
         },
       });
 
@@ -140,9 +170,15 @@ export const Agenda: React.FC = () => {
       } else {
         alert("Could not find an address for this Eircode. Please enter manually.");
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Eircode search error:", error);
-      alert("Service temporarily unavailable. Please enter the address manually.");
+      
+      // Handle the case where the API key might be invalid or project not found
+      if (error.message?.includes("Requested entity was not found") && aistudio) {
+        await aistudio.openSelectKey();
+      }
+      
+      alert("Address search failed. Please ensure your Eircode is correct or enter the address manually. Note: You may need a valid API key with Billing enabled.");
     } finally {
       setIsSearchingAddress(false);
     }
