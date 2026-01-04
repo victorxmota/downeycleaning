@@ -10,7 +10,6 @@ import {
   deleteDoc, 
   query, 
   where,
-  orderBy,
   limit,
   arrayUnion
 } from "firebase/firestore";
@@ -27,7 +26,6 @@ const NOTIFICATIONS_COL = 'notifications';
 
 const ADMIN_EMAIL = 'adminreports@downeycleaning.ie';
 
-// Helper to notify other components of notification changes
 const notifyNotificationChange = () => {
   window.dispatchEvent(new CustomEvent('downey:notifications-updated'));
 };
@@ -36,7 +34,7 @@ const sanitizeData = (data: any) => {
   const clean: any = {};
   Object.keys(data).forEach(key => {
     if (data[key] === undefined) {
-      // Skip undefined
+      // Skip
     } else if (data[key] === null) {
       if (key === 'readBy') clean[key] = [];
       else if (key === 'recipientId') clean[key] = 'all';
@@ -51,7 +49,6 @@ const sanitizeData = (data: any) => {
 };
 
 export const Database = {
-  // Syncs firebase user with firestore user document
   syncUser: async (firebaseUser: FirebaseUser, extraData?: Partial<User>): Promise<User> => {
     const userRef = doc(db, USERS_COL, firebaseUser.uid);
     const userSnap = await getDoc(userRef);
@@ -78,19 +75,16 @@ export const Database = {
     }
   },
 
-  // Updates user information in firestore
   updateUser: async (userId: string, updates: Partial<User>): Promise<void> => {
     const userRef = doc(db, USERS_COL, userId);
     await updateDoc(userRef, sanitizeData(updates));
   },
 
-  // Deletes user from firestore
   deleteUser: async (userId: string): Promise<void> => {
     const userRef = doc(db, USERS_COL, userId);
     await deleteDoc(userRef);
   },
 
-  // Find a user by their UID/Account ID
   getUserByAccountId: async (accountId: string): Promise<User | null> => {
     const userRef = doc(db, USERS_COL, accountId);
     const userSnap = await getDoc(userRef);
@@ -100,7 +94,6 @@ export const Database = {
     return null;
   },
 
-  // Get all registered users
   getAllUsers: async (): Promise<User[]> => {
     const q = query(collection(db, USERS_COL));
     const querySnapshot = await getDocs(q);
@@ -110,7 +103,6 @@ export const Database = {
     } as User));
   },
 
-  // Notifications logic
   sendNotification: async (notification: Omit<AppNotification, 'id'>) => {
     try {
       const dataToSave = {
@@ -127,7 +119,7 @@ export const Database = {
       notifyNotificationChange();
       return docRef;
     } catch (error: any) {
-      console.error("Database: Error saving notification:", error);
+      console.error("Database Error:", error);
       throw error;
     }
   },
@@ -142,17 +134,9 @@ export const Database = {
       );
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return { 
-            ...data, 
-            id: doc.id,
-            readBy: Array.isArray(data.readBy) ? data.readBy : [] 
-          } as AppNotification;
-        })
+        .map(doc => ({ ...doc.data(), id: doc.id } as AppNotification))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (error) {
-      console.error("Database: Error fetching received notifications:", error);
       return [];
     }
   },
@@ -166,17 +150,9 @@ export const Database = {
       );
       const querySnapshot = await getDocs(q);
       return querySnapshot.docs
-        .map(doc => {
-          const data = doc.data();
-          return { 
-            ...data, 
-            id: doc.id,
-            readBy: Array.isArray(data.readBy) ? data.readBy : []
-          } as AppNotification;
-        })
+        .map(doc => ({ ...doc.data(), id: doc.id } as AppNotification))
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (error) {
-      console.error("Database: Error fetching sent notifications:", error);
       return [];
     }
   },
@@ -185,22 +161,16 @@ export const Database = {
     if (!userId || !notificationId) return;
     try {
       const docRef = doc(db, NOTIFICATIONS_COL, notificationId);
-      await updateDoc(docRef, {
-        readBy: arrayUnion(userId)
-      });
+      await updateDoc(docRef, { readBy: arrayUnion(userId) });
       notifyNotificationChange();
-    } catch (error) {
-      console.error("Database: Error marking notification as read:", error);
-    }
+    } catch (error) {}
   },
 
   deleteNotification: async (notificationId: string): Promise<void> => {
-    const docRef = doc(db, NOTIFICATIONS_COL, notificationId);
-    await deleteDoc(docRef);
+    await deleteDoc(doc(db, NOTIFICATIONS_COL, notificationId));
     notifyNotificationChange();
   },
 
-  // Offices management
   getOffices: async (): Promise<Office[]> => {
     const q = query(collection(db, OFFICES_COL));
     const querySnapshot = await getDocs(q);
@@ -215,7 +185,6 @@ export const Database = {
     await deleteDoc(doc(db, OFFICES_COL, id));
   },
 
-  // Schedules management
   getSchedulesByUser: async (userId: string): Promise<ScheduleItem[]> => {
     const q = query(collection(db, SCHEDULES_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
@@ -234,7 +203,6 @@ export const Database = {
     await deleteDoc(doc(db, SCHEDULES_COL, id));
   },
 
-  // Shift records logic
   getActiveSession: async (userId: string): Promise<TimeRecord | null> => {
     const q = query(
       collection(db, RECORDS_COL), 
@@ -255,7 +223,6 @@ export const Database = {
       await uploadBytes(storageRef, photo);
       photoUrl = await getDownloadURL(storageRef);
     }
-    
     const data = { ...record, photoUrl, endTime: null, totalPausedMs: 0, isPaused: false };
     const docRef = await addDoc(collection(db, RECORDS_COL), sanitizeData(data));
     return { ...data, id: docRef.id } as TimeRecord;
@@ -264,7 +231,6 @@ export const Database = {
   togglePause: async (session: TimeRecord): Promise<TimeRecord> => {
     const now = new Date().toISOString();
     let updates: any = {};
-    
     if (session.isPaused) {
       const pausedAt = new Date(session.pausedAt!).getTime();
       const currentPauseDuration = Date.now() - pausedAt;
@@ -274,12 +240,8 @@ export const Database = {
         totalPausedMs: (session.totalPausedMs || 0) + currentPauseDuration
       };
     } else {
-      updates = {
-        isPaused: true,
-        pausedAt: now
-      };
+      updates = { isPaused: true, pausedAt: now };
     }
-    
     await updateDoc(doc(db, RECORDS_COL, session.id), updates);
     return { ...session, ...updates };
   },
@@ -291,25 +253,26 @@ export const Database = {
       await uploadBytes(storageRef, photo);
       endPhotoUrl = await getDownloadURL(storageRef);
     }
-    
     const finalUpdates = { ...updates, endPhotoUrl, isPaused: false };
     await updateDoc(doc(db, RECORDS_COL, id), sanitizeData(finalUpdates));
   },
 
   getAllRecords: async (): Promise<TimeRecord[]> => {
-    const q = query(collection(db, RECORDS_COL), orderBy("startTime", "desc"));
+    const q = query(collection(db, RECORDS_COL));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord));
+    // Client-side sorting to avoid index requirement
+    return querySnapshot.docs
+      .map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord))
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   },
 
   getRecordsByUser: async (userId: string): Promise<TimeRecord[]> => {
-    const q = query(
-      collection(db, RECORDS_COL), 
-      where("userId", "==", userId),
-      orderBy("startTime", "desc")
-    );
+    const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord));
+    // Client-side sorting to avoid index requirement
+    return querySnapshot.docs
+      .map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord))
+      .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
   },
 
   updateRecord: async (id: string, updates: Partial<TimeRecord>): Promise<void> => {
