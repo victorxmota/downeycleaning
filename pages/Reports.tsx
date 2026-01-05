@@ -551,7 +551,8 @@ export const Reports: React.FC = () => {
                   const end = record.endTime ? new Date(record.endTime).getTime() : Date.now();
                   const pause = record.totalPausedMs || 0;
                   const diff = end - start - pause;
-                  const checkedCount = Object.values(record.safetyChecklist || {}).filter(v => v === true).length;
+                  const safetyItems = getCheckedItems(record.safetyChecklist);
+                  const checkedCount = safetyItems.length;
                   const staff = users.find(u => u.id === record.userId);
                   
                   return (
@@ -589,15 +590,24 @@ export const Reports: React.FC = () => {
                           <>
                             <div className="font-black text-gray-900">{msToTime(diff)}</div>
                             <div className="text-[9px] text-gray-400 font-mono mt-0.5">
-                              {format(parseISO(record.startTime), 'HH:mm')} → {record.endTime ? format(parseISO(record.endTime), 'HH:mm') : '...'}
+                              {format(parseISO(record.startTime), 'HH:mm')} → {record.endTime ? format(parseISO(record.startTime), 'HH:mm') : '...'}
                             </div>
                           </>
                         )}
                       </td>
                       <td className="p-4">
                         {checkedCount > 0 ? (
-                           <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-1 rounded text-[9px] font-black border border-green-100 uppercase tracking-tighter w-fit">
-                             <ShieldCheck size={10} /> {checkedCount} ITEMS
+                           <div className="space-y-1.5">
+                             <div className="flex items-center gap-1 bg-green-50 text-green-700 px-1.5 py-1 rounded text-[9px] font-black border border-green-100 uppercase tracking-tighter w-fit">
+                               <ShieldCheck size={10} /> {checkedCount} ITEMS
+                             </div>
+                             <div className="flex flex-wrap gap-1 max-w-[180px]">
+                               {safetyItems.map((item, idx) => (
+                                 <span key={idx} className="bg-gray-50 text-gray-500 border border-gray-100 px-1 py-0.5 rounded-[4px] text-[8px] font-bold uppercase whitespace-nowrap">
+                                   {item}
+                                 </span>
+                               ))}
+                             </div>
                            </div>
                         ) : (
                            <span className="text-[10px] text-gray-300 font-bold italic">No data</span>
