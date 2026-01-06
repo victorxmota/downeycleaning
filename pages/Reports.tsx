@@ -590,7 +590,7 @@ export const Reports: React.FC = () => {
                           <>
                             <div className="font-black text-gray-900">{msToTime(diff)}</div>
                             <div className="text-[9px] text-gray-400 font-mono mt-0.5">
-                              {format(parseISO(record.startTime), 'HH:mm')} → {record.endTime ? format(parseISO(record.startTime), 'HH:mm') : '...'}
+                              {format(parseISO(record.startTime), 'HH:mm')} → {record.endTime ? format(parseISO(record.endTime), 'HH:mm') : '...'}
                             </div>
                           </>
                         )}
