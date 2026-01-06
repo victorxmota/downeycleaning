@@ -182,7 +182,7 @@ export const CheckIn: React.FC = () => {
   const getRequiredLocation = (): Promise<GeoLocation> => {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) {
-        reject(new Error("Seu navegador não suporta geolocalização. O GPS é obrigatório para check-in/out."));
+        reject(new Error("Your browser does not support geolocation. GPS is required for check-in/out."));
         return;
       }
       navigator.geolocation.getCurrentPosition(
@@ -193,10 +193,10 @@ export const CheckIn: React.FC = () => {
         (err) => {
           if (err.code === 1) {
             setGpsStatus('denied');
-            reject(new Error("Permissão de GPS negada. É obrigatório autorizar o acesso à localização para continuar."));
+            reject(new Error("GPS permission denied. Location access is mandatory to continue."));
           } else {
             setGpsStatus('error');
-            reject(new Error("Não foi possível obter sua localização. Certifique-se de que o GPS do dispositivo está ligado."));
+            reject(new Error("Unable to obtain your location. Please ensure device GPS is turned on."));
           }
         },
         { enableHighAccuracy: true, timeout: 10000 }
@@ -206,13 +206,13 @@ export const CheckIn: React.FC = () => {
 
   const handleStartShift = async () => {
     if (!user || !locationName.trim()) {
-      alert("Por favor, selecione ou digite um local.");
+      alert("Please select or type a location.");
       return;
     }
 
     const checkedCount = Object.values(checklist).filter(v => v === true).length;
     if (checkedCount < 5) {
-      if (!confirm("Você marcou poucos itens de segurança. Deseja prosseguir mesmo assim?")) return;
+      if (!confirm("You have checked very few safety items. Do you want to proceed anyway?")) return;
     }
 
     setIsProcessing(true);
@@ -233,8 +233,8 @@ export const CheckIn: React.FC = () => {
         setActiveSession(newRecord);
         setPhotoFile(null);
     } catch (error: any) {
-        console.error("Falha ao iniciar turno:", error);
-        alert(error.message || "Não foi possível iniciar o turno. O GPS é obrigatório.");
+        console.error("Failed to start shift:", error);
+        alert(error.message || "Could not start the shift. GPS is required.");
     } finally {
         setIsProcessing(false);
     }
@@ -248,7 +248,7 @@ export const CheckIn: React.FC = () => {
       setActiveSession(updatedSession);
     } catch (error: any) {
       console.error(error);
-      alert("Falha ao atualizar pausa.");
+      alert("Failed to update pause.");
     } finally {
       setIsProcessing(false);
     }
@@ -275,7 +275,7 @@ export const CheckIn: React.FC = () => {
       setChecklist(INITIAL_CHECKLIST);
     } catch (error: any) {
       console.error(error);
-      alert(error.message || "Não foi possível encerrar o turno. A localização GPS é obrigatória para verificação.");
+      alert(error.message || "Could not end the shift. GPS location is mandatory for verification.");
     } finally {
       setIsProcessing(false);
     }
@@ -320,7 +320,7 @@ export const CheckIn: React.FC = () => {
   if (initializing) return (
     <div className="flex flex-col items-center justify-center p-20 space-y-4">
       <Loader2 className="animate-spin text-brand-600" size={48} />
-      <p className="text-gray-500 font-medium">Iniciando protocolos de segurança...</p>
+      <p className="text-gray-500 font-medium">Initializing security protocols...</p>
     </div>
   );
 
@@ -330,9 +330,9 @@ export const CheckIn: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
             <ShieldCheck className="text-brand-600" />
-            Plano de Segurança Ativo
+            SAFETY PLAN OF ACTION
           </h2>
-          <p className="text-gray-500 text-sm italic mt-1">O GPS é obrigatório para registrar seu serviço.</p>
+          <p className="text-gray-500 text-sm italic mt-1">GPS is mandatory to register your service.</p>
         </div>
         
         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[10px] font-black uppercase tracking-widest ${
@@ -340,9 +340,9 @@ export const CheckIn: React.FC = () => {
           gpsStatus === 'denied' ? 'bg-red-50 text-red-700 border-red-200 animate-pulse' :
           'bg-gray-50 text-gray-500 border-gray-200'
         }`}>
-          {gpsStatus === 'acquired' ? <><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> GPS ATIVO</> :
-           gpsStatus === 'denied' ? <><AlertCircle size={12} /> GPS BLOQUEADO</> :
-           <><Loader2 size={12} className="animate-spin" /> VERIFICANDO GPS</>}
+          {gpsStatus === 'acquired' ? <><div className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" /> GPS ACTIVE</> :
+           gpsStatus === 'denied' ? <><AlertCircle size={12} /> GPS BLOCKED</> :
+           <><Loader2 size={12} className="animate-spin" /> CHECKING GPS</>}
         </div>
 
         {activeSession && (
@@ -356,61 +356,61 @@ export const CheckIn: React.FC = () => {
         <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start gap-3 animate-shake">
           <AlertTriangle className="text-red-600 shrink-0" size={24} />
           <div>
-            <p className="text-red-900 font-black uppercase text-xs tracking-widest">Ação Bloqueada: GPS Negado</p>
-            <p className="text-red-700 text-xs mt-1">A Downey Cleaning exige verificação GPS. Por favor, autorize a localização nas configurações do navegador e atualize a página.</p>
+            <p className="text-red-900 font-black uppercase text-xs tracking-widest">Action Blocked: GPS Denied</p>
+            <p className="text-red-700 text-xs mt-1">Downey Cleaning requires GPS verification. Please authorize location in browser settings and refresh the page.</p>
           </div>
         </div>
       )}
 
       {/* Checklist Sections */}
-      <Section title="Plano de Ação" icon={ShieldCheck}>
-        <CheckItem id="knowJobSafety" label="Sabe completar o trabalho com segurança?" />
-        <CheckItem id="weatherCheck" label="Condições climáticas apropriadas?" />
-        <CheckItem id="safePassInDate" label="Safe Pass em dia?" />
-        <CheckItem id="hazardAwareness" label="Ciente de riscos de tropeço/queda?" />
-        <CheckItem id="floorConditions" label="Pisos molhados identificados?" />
+      <Section title="Plan of Action" icon={ShieldCheck}>
+        <CheckItem id="knowJobSafety" label="Do you know how to complete the job safely?" />
+        <CheckItem id="weatherCheck" label="Appropriate weather conditions?" />
+        <CheckItem id="safePassInDate" label="Safe Pass in date?" />
+        <CheckItem id="hazardAwareness" label="Aware of trip/fall hazards?" />
+        <CheckItem id="floorConditions" label="Wet floors identified?" />
       </Section>
 
-      <Section title="Levantamento de Peso" icon={Box}>
-        <CheckItem id="manualHandlingCert" label="Certificado de Manual Handling completo?" />
-        <CheckItem id="liftingHelp" label="Peso excessivo (precisa de ajuda)?" />
+      <Section title="Manual Handling" icon={Box}>
+        <CheckItem id="manualHandlingCert" label="Manual Handling training complete?" />
+        <CheckItem id="liftingHelp" label="Excessive weight (need assistance)?" />
       </Section>
 
-      <Section title="Trabalho em Altura" icon={Construction}>
-        <CheckItem id="anchorPoints" label="Pontos de ancoragem identificados?" />
-        <CheckItem id="ladderFooting" label="Uma pessoa segurando a escada?" />
-        <CheckItem id="safetyCones" label="Cones/sinalização de piso molhado?" />
-        <CheckItem id="communication" label="Comunicação com colegas ativa?" />
+      <Section title="Working at Height" icon={Construction}>
+        <CheckItem id="anchorPoints" label="Anchor points identified?" />
+        <CheckItem id="ladderFooting" label="One person holding the ladder?" />
+        <CheckItem id="safetyCones" label="Cones/wet floor signage?" />
+        <CheckItem id="communication" label="Active communication with colleagues?" />
       </Section>
 
-      <Section title="Equipamento Verificado" icon={Activity}>
-        <CheckItem id="laddersCheck" label="Escadas verificadas?" />
-        <CheckItem id="sharpEdges" label="Verificou bordas afiadas?" />
-        <CheckItem id="scraperCovers" label="Protetores nas lâminas?" />
-        <CheckItem id="hotSurfaces" label="Cuidado com superfícies quentes?" />
-        <CheckItem id="chemicalCourse" label="Treinamento de químicos completo?" />
-        <CheckItem id="chemicalAwareness" label="Ciente das diluições/segurança?" />
-        <CheckItem id="tidyEquipment" label="Equipamento organizado?" />
-        <CheckItem id="laddersStored" label="Escadas guardadas com segurança?" />
+      <Section title="Equipment Verified" icon={Activity}>
+        <CheckItem id="laddersCheck" label="Ladders checked?" />
+        <CheckItem id="sharpEdges" label="Checked for sharp edges?" />
+        <CheckItem id="scraperCovers" label="Covers on blades?" />
+        <CheckItem id="hotSurfaces" label="Caution with hot surfaces?" />
+        <CheckItem id="chemicalCourse" label="Chemical training complete?" />
+        <CheckItem id="chemicalAwareness" label="Aware of dilutions/safety?" />
+        <CheckItem id="tidyEquipment" label="Equipment organized?" />
+        <CheckItem id="laddersStored" label="Ladders stored safely?" />
       </Section>
 
       {/* PPE Visual Grid */}
       <div className="bg-white p-5 rounded-xl border border-gray-200 shadow-sm">
         <div className="flex items-center gap-2 border-b pb-2 mb-4">
           <AlertTriangle className="text-brand-600" size={20} />
-          <h3 className="font-bold text-gray-800 uppercase text-sm tracking-wide">EPIs Necessários</h3>
+          <h3 className="font-bold text-gray-800 uppercase text-sm tracking-wide">Required PPE</h3>
         </div>
         <div className="grid grid-cols-3 sm:grid-cols-5 gap-4">
           {[
-            { id: 'highVis', label: 'Colete', icon: Construction },
-            { id: 'helmet', label: 'Capacete', icon: HardHat },
-            { id: 'goggles', label: 'Óculos', icon: Glasses },
-            { id: 'gloves', label: 'Luvas', icon: Hand },
-            { id: 'mask', label: 'Máscara', icon: ShieldCheck },
-            { id: 'earMuffs', label: 'Protetor Auricular', icon: Activity },
-            { id: 'faceGuard', label: 'Protetor Facial', icon: ShieldCheck },
-            { id: 'harness', label: 'Cinto', icon: ShieldCheck },
-            { id: 'boots', label: 'Botas', icon: MapPin },
+            { id: 'highVis', label: 'Hi-Vis', icon: Construction },
+            { id: 'helmet', label: 'Helmet', icon: HardHat },
+            { id: 'goggles', label: 'Goggles', icon: Glasses },
+            { id: 'gloves', label: 'Gloves', icon: Hand },
+            { id: 'mask', label: 'Mask', icon: ShieldCheck },
+            { id: 'earMuffs', label: 'Ear Muffs', icon: Activity },
+            { id: 'faceGuard', label: 'Face Guard', icon: ShieldCheck },
+            { id: 'harness', label: 'Harness', icon: ShieldCheck },
+            { id: 'boots', label: 'Boots', icon: MapPin },
           ].map((ppe) => (
             <button
               key={ppe.id}
@@ -437,20 +437,20 @@ export const CheckIn: React.FC = () => {
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-4">
           <div>
             <div className="flex justify-between items-end mb-1">
-              <label className="block text-sm font-bold text-gray-700 uppercase tracking-tight">Local de Trabalho</label>
+              <label className="block text-sm font-bold text-gray-700 uppercase tracking-tight">Work Location</label>
               <button 
                 onClick={() => setIsManualLocation(!isManualLocation)}
                 className="text-xs text-brand-600 font-bold flex items-center gap-1 hover:underline"
               >
                 {isManualLocation ? <ChevronDown size={14}/> : <Edit2 size={14}/>}
-                {isManualLocation ? "Selecionar da lista" : "Digitar manualmente"}
+                {isManualLocation ? "Select from list" : "Type manually"}
               </button>
             </div>
             <div className="relative">
               {isManualLocation ? (
                 <input
                   type="text"
-                  placeholder="Nome do local ou endereço..."
+                  placeholder="Location name or address..."
                   className="w-full rounded-md border-gray-300 p-3 bg-white border font-medium"
                   value={locationName}
                   onChange={(e) => setLocationName(e.target.value)}
@@ -461,7 +461,7 @@ export const CheckIn: React.FC = () => {
                   value={locationName}
                   onChange={(e) => setLocationName(e.target.value)}
                 >
-                  <option value="">Selecione o local...</option>
+                  <option value="">Select location...</option>
                   {availableLocations.map((loc, idx) => (
                     <option key={idx} value={loc.name}>{loc.name} - {loc.address}</option>
                   ))}
@@ -472,7 +472,7 @@ export const CheckIn: React.FC = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">Foto Início (Opcional)</label>
+            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">Start Photo (Optional)</label>
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
                   {photoPreview ? (
@@ -480,7 +480,7 @@ export const CheckIn: React.FC = () => {
                   ) : (
                     <>
                       <Camera className="w-8 h-8 text-gray-400" />
-                      <p className="text-xs text-gray-400 mt-2">Clique para tirar foto</p>
+                      <p className="text-xs text-gray-400 mt-2">Click to take photo</p>
                     </>
                   )}
                 </div>
@@ -495,14 +495,14 @@ export const CheckIn: React.FC = () => {
           <div className="space-y-6">
              <div className={activeSession.isPaused ? '' : 'animate-pulse'}>
                 <p className="text-white/70 font-bold uppercase tracking-widest text-[10px] mb-1">
-                  {activeSession.isPaused ? 'Turno em Pausa / Break' : 'Turno em Andamento'}
+                  {activeSession.isPaused ? 'Shift Paused / Break' : 'Shift in Progress'}
                 </p>
                 <div className="text-5xl font-mono font-bold tracking-tighter">{formatTime(elapsedTime)}</div>
                 <p className="text-white/60 text-sm mt-2 font-medium">{activeSession.locationName}</p>
              </div>
              
              <div className="bg-white/10 p-4 rounded-lg text-left border border-white/5">
-                <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-widest">Foto Final (Opcional)</label>
+                <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-widest">End Photo (Optional)</label>
                 <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/20 border-dashed rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
                     {endPhotoPreview ? (
@@ -523,7 +523,7 @@ export const CheckIn: React.FC = () => {
                     disabled={isProcessing}
                 >
                     {isProcessing ? <Loader2 className="animate-spin mr-2"/> : (activeSession.isPaused ? <Play size={20} className="mr-2"/> : <PauseCircle size={20} className="mr-2"/>)}
-                    {activeSession.isPaused ? 'Retomar' : 'Pausar'}
+                    {activeSession.isPaused ? 'Resume' : 'Pause'}
                 </Button>
 
                 <Button 
@@ -533,7 +533,7 @@ export const CheckIn: React.FC = () => {
                     disabled={isProcessing}
                 >
                     {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <StopCircle size={20} className="mr-2"/>} 
-                    Finalizar
+                    Finish
                 </Button>
              </div>
           </div>
@@ -546,9 +546,9 @@ export const CheckIn: React.FC = () => {
               disabled={isProcessing}
               >
               {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <PlayCircle className="mr-2"/>} 
-              {isProcessing ? "Verificando GPS..." : "Submeter e Iniciar"}
+              {isProcessing ? "Verifying GPS..." : "Submit and Start"}
             </Button>
-            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">O GPS é obrigatório para iniciar.</p>
+            <p className="text-[10px] text-gray-500 uppercase tracking-widest font-bold">GPS is required to start.</p>
           </div>
         )}
       </div>
