@@ -1,3 +1,11 @@
+a distanncia dos meus filhos
+motivação para me tornar uma pessoa melhor
+estou me fechando.
+tá me ajudando a fortalece e evoluir 
+
+vou vai aprender pela dor 
+
+
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -5,7 +13,8 @@ import { loginWithEmail } from '../services/firebase';
 import { Database } from '../services/database';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
-import { LogIn, User as UserIcon, Lock, Loader2, ShieldCheck } from 'lucide-react';
+import { LogIn, User as UserIcon, Lock, Loader2 } from 'lucide-react';
+import logo from '../assets/downey-logo.png'; // ajusta o path se necessário
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -27,7 +36,6 @@ export const Login: React.FC = () => {
     try {
       let emailToLogin = identifier;
 
-      // If identifier is not an email, try to find by Account ID
       if (!identifier.includes('@')) {
         const user = await Database.getUserByAccountId(identifier);
         if (user && user.email) {
@@ -50,21 +58,24 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-brand-100">
+        
+        {/* Logo substituindo o ícone anterior */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-brand-100 rounded-full mb-4">
-            <ShieldCheck className="text-brand-600 w-8 h-8" />
-          </div>
-          <h1 className="text-3xl font-black text-brand-900 tracking-tight">Downey Cleaning</h1>
+          <img
+            src={logo}
+            alt="Downey Cleaning"
+            className="w-48 mx-auto mb-4 object-contain"
+          />
           <p className="text-gray-400 mt-2 font-medium">Professional Access Portal</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="relative">
-            <Input 
-              label="Email or Account ID" 
-              placeholder="name@downeycleaning.ie" 
-              value={identifier} 
-              onChange={(e) => setIdentifier(e.target.value)} 
+            <Input
+              label="Email or Account ID"
+              placeholder="name@downeycleaning.ie"
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               required
               className="pl-10"
             />
@@ -72,12 +83,12 @@ export const Login: React.FC = () => {
           </div>
 
           <div className="relative">
-            <Input 
-              label="Password" 
-              type="password" 
-              placeholder="••••••••" 
-              value={password} 
-              onChange={(e) => setPassword(e.target.value)} 
+            <Input
+              label="Password"
+              type="password"
+              placeholder="••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               required
               className="pl-10"
             />
@@ -91,9 +102,9 @@ export const Login: React.FC = () => {
             </div>
           )}
 
-          <Button 
-            type="submit" 
-            fullWidth 
+          <Button
+            type="submit"
+            fullWidth
             disabled={loading}
             className="h-14 text-lg font-bold shadow-lg"
           >
@@ -110,7 +121,7 @@ export const Login: React.FC = () => {
             Internal Use Only
           </p>
           <p className="text-[10px] text-gray-300 mt-2 italic">
-            Access to this system is restricted to authorized personnel. 
+            Access to this system is restricted to authorized personnel.
             All activities are monitored and logged.
           </p>
         </div>
