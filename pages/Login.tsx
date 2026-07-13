@@ -1,12 +1,3 @@
-a distanncia dos meus filhos
-motivação para me tornar uma pessoa melhor
-estou me fechando.
-tá me ajudando a fortalece e evoluir 
-
-vou vai aprender pela dor 
-
-
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { loginWithEmail } from '../services/firebase';
@@ -14,7 +5,7 @@ import { Database } from '../services/database';
 import { Input } from '../components/ui/Input';
 import { Button } from '../components/ui/Button';
 import { LogIn, User as UserIcon, Lock, Loader2 } from 'lucide-react';
-import logo from '../assets/downey-logo.png'; // ajusta o path se necessário
+import logo from '../assets/downey-logo.png';
 
 export const Login: React.FC = () => {
   const [identifier, setIdentifier] = useState('');
@@ -29,13 +20,10 @@ export const Login: React.FC = () => {
       setError('Please provide Email/ID and Password.');
       return;
     }
-
     setLoading(true);
     setError('');
-
     try {
       let emailToLogin = identifier;
-
       if (!identifier.includes('@')) {
         const user = await Database.getUserByAccountId(identifier);
         if (user && user.email) {
@@ -44,12 +32,15 @@ export const Login: React.FC = () => {
           throw new Error('Account ID not found.');
         }
       }
-
       await loginWithEmail(emailToLogin, password);
       navigate('/');
     } catch (err: any) {
       console.error(err);
-      setError(err.message === 'Account ID not found.' ? 'Account ID not found.' : 'Invalid credentials. Please check your data.');
+      setError(
+        err.message === 'Account ID not found.'
+          ? 'Account ID not found.'
+          : 'Invalid credentials. Please check your data.'
+      );
     } finally {
       setLoading(false);
     }
@@ -58,8 +49,6 @@ export const Login: React.FC = () => {
   return (
     <div className="min-h-screen bg-brand-50 flex items-center justify-center p-4">
       <div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md border border-brand-100">
-        
-        {/* Logo substituindo o ícone anterior */}
         <div className="text-center mb-10">
           <img
             src={logo}
@@ -86,7 +75,7 @@ export const Login: React.FC = () => {
             <Input
               label="Password"
               type="password"
-              placeholder="••••••••"
+              placeholder="........"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -96,7 +85,7 @@ export const Login: React.FC = () => {
           </div>
 
           {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold border border-red-100 animate-shake flex items-center gap-2">
+            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-xs font-bold border border-red-100 flex items-center gap-2">
               <span className="w-1.5 h-1.5 bg-red-600 rounded-full"></span>
               {error}
             </div>
@@ -111,7 +100,10 @@ export const Login: React.FC = () => {
             {loading ? (
               <Loader2 className="animate-spin" />
             ) : (
-              <><LogIn size={20} className="mr-2" /> Secure Login</>
+              <>
+                <LogIn size={20} className="mr-2" />
+                Secure Login
+              </>
             )}
           </Button>
         </form>
@@ -120,7 +112,7 @@ export const Login: React.FC = () => {
           <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
             Internal Use Only
           </p>
-          <p className="text-[10px] text-gray-300 mt-2 italic">
+          <p className="text-gray-300 mt-2 italic" style={{ fontSize: '10px' }}>
             Access to this system is restricted to authorized personnel.
             All activities are monitored and logged.
           </p>
