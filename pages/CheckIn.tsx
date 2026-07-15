@@ -4,6 +4,7 @@ import { useAuth } from '../App';
 import { Database } from '../services/database';
 import { TimeRecord, SafetyChecklist, GeoLocation } from '../types';
 import { Button } from '../components/ui/Button';
+import { Input } from '../components/ui/Input';
 import { 
   Camera, 
   ShieldCheck, 
@@ -23,9 +24,18 @@ import {
   Edit2,
   PauseCircle,
   Play,
-  AlertCircle
+  AlertCircle,
+  Plus,
+  CheckSquare,
+  Square,
+  Save,
+  X,
+  Calendar,
+  Clock,
+  Info
 } from 'lucide-react';
 
+const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const INITIAL_CHECKLIST: SafetyChecklist = {
   knowJobSafety: false,
   weatherCheck: false,
@@ -64,6 +74,14 @@ export const CheckIn: React.FC = () => {
   const [isManualLocation, setIsManualLocation] = useState(false);
   const [availableLocations, setAvailableLocations] = useState<{name: string, address: string}[]>([]);
   
+  const [isShowingAskRegisterModal, setIsShowingAskRegisterModal] = useState(false);
+  const [isShowingCompanyRegisterModal, setIsShowingCompanyRegisterModal] = useState(false);
+  const [newOfficeForm, setNewOfficeForm] = useState({
+    name: '',
+    eircode: '',
+    address: ''
+  });
+
   const [isProcessing, setIsProcessing] = useState(false);
   const [initializing, setInitializing] = useState(true);
   const [gpsStatus, setGpsStatus] = useState<'checking' | 'acquired' | 'denied' | 'error'>('checking');
@@ -74,9 +92,98 @@ export const CheckIn: React.FC = () => {
   const [endPhotoPreview, setEndPhotoPreview] = useState<string | null>(null);
   const [endPhotoFile, setEndPhotoFile] = useState<File | null>(null);
 
+  const [isShowingScheduleModal, setIsShowingScheduleModal] = useState(false);
+  const [scheduleFormData, setScheduleFormData] = useState({
+    address: '',
+    notes: '',
+    hoursPerDay: 4,
+    days: [] as number[]
+  });
+
   const [checklist, setChecklist] = useState<SafetyChecklist>(INITIAL_CHECKLIST);
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<number | null>(null);
+
+  const loadAvailableLocations = async (userId: string) => {
+    try {
+      const schedules = await Database.getSchedulesByUser(userId);
+      const offices = await Database.getOffices();
+      
+      const uniqueLocs = new Map();
+      schedules.forEach(s => {
+        if (!uniqueLocs.has(s.locationName)) {
+          uniqueLocs.set(s.locationName, s.address);
+        }
+      });
+      
+      offices.forEach(o => {
+        if (!uniqueLocs.has(o.name)) {
+          uniqueLocs.set(o.name, o.address);
+        }
+      });
+      
+      const locArray = Array.from(uniqueLocs.entries()).map(([name, address]) => ({ name, address }));
+      setAvailableLocations(locArray);
+      
+      if (locArray.length === 0) {
+        setIsManualLocation(true);
+      }
+    } catch (e) {
+      console.error("Error loading locations:", e);
+    }
+  };
+
+  const handleTypeManuallyClick = () => {
+    if (isManualLocation) {
+      setIsManualLocation(false);
+    } else {
+      setIsShowingAskRegisterModal(true);
+    }
+  };
+
+  const handleAskRegisterNo = () => {
+    setIsShowingAskRegisterModal(false);
+    setIsManualLocation(true);
+  };
+
+  const handleAskRegisterYes = () => {
+    setIsShowingAskRegisterModal(false);
+    setNewOfficeForm({ name: '', eircode: '', address: '' });
+    setIsShowingCompanyRegisterModal(true);
+  };
+
+  const handleSaveCompany = async () => {
+    if (!newOfficeForm.name.trim() || !newOfficeForm.address.trim()) {
+      alert("Location Name and Address are required.");
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      await Database.addOffice({
+        name: newOfficeForm.name.trim(),
+        eircode: newOfficeForm.eircode.trim(),
+        address: newOfficeForm.address.trim(),
+        defaultSchedule: []
+      });
+
+      alert("Location registered successfully!");
+      setIsShowingCompanyRegisterModal(false);
+
+      if (user) {
+        await loadAvailableLocations(user.id);
+      }
+
+      setLocationName(newOfficeForm.name.trim());
+      setIsManualLocation(false);
+
+    } catch (e: any) {
+      console.error("Error registering company:", e);
+      alert("Failed to register location: " + (e.message || "Unknown error"));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
 
   useEffect(() => {
     const init = async () => {
@@ -92,20 +199,7 @@ export const CheckIn: React.FC = () => {
           setPhotoPreview(session.photoUrl || null);
         }
 
-        const schedules = await Database.getSchedulesByUser(user.id);
-        const uniqueLocs = new Map();
-        schedules.forEach(s => {
-          if (!uniqueLocs.has(s.locationName)) {
-            uniqueLocs.set(s.locationName, s.address);
-          }
-        });
-        
-        const locArray = Array.from(uniqueLocs.entries()).map(([name, address]) => ({ name, address }));
-        setAvailableLocations(locArray);
-        
-        if (locArray.length === 0) {
-          setIsManualLocation(true);
-        }
+        await loadAvailableLocations(user.id);
 
         checkGpsAvailability();
       } catch (e) {
@@ -155,6 +249,72 @@ export const CheckIn: React.FC = () => {
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
   }, [activeSession]);
 
+  const toggleScheduleDay = (dayIndex: number) => {
+    setScheduleFormData(prev => ({
+      ...prev,
+      days: prev.days.includes(dayIndex) 
+        ? prev.days.filter(d => d !== dayIndex) 
+        : [...prev.days, dayIndex]
+    }));
+  };
+
+  const handleRegisterSchedule = async () => {
+    if (!user || !locationName.trim() || !scheduleFormData.address.trim()) {
+      alert("Location and Address are required");
+      return;
+    }
+    if (scheduleFormData.days.length === 0) {
+      alert("Please select at least one day.");
+      return;
+    }
+    
+    setIsProcessing(true);
+    try {
+      if (!user) throw new Error("User session not found.");
+      if (!locationName.trim()) throw new Error("Please enter the Site Name.");
+      if (!scheduleFormData.address.trim()) throw new Error("Please enter the Site Address.");
+      if (scheduleFormData.days.length === 0) throw new Error("Please select at least one day for this shift.");
+
+      for (const day of scheduleFormData.days) {
+        await Database.addSchedule({
+          userId: user.id,
+          locationName: locationName.trim(),
+          address: scheduleFormData.address.trim(),
+          dayOfWeek: day,
+          hoursPerDay: Number(scheduleFormData.hoursPerDay),
+          notes: scheduleFormData.notes
+        });
+      }
+      
+      alert("Shift registered successfully in your schedule!");
+      setIsShowingScheduleModal(false);
+      
+      // Reset form
+      setScheduleFormData({
+        address: '',
+        notes: '',
+        hoursPerDay: 4,
+        days: []
+      });
+      
+      // Update available locations list
+      const schedules = await Database.getSchedulesByUser(user.id);
+      const uniqueLocs = new Map();
+      schedules.forEach(s => {
+        if (!uniqueLocs.has(s.locationName)) {
+          uniqueLocs.set(s.locationName, s.address);
+        }
+      });
+      const locArray = Array.from(uniqueLocs.entries()).map(([name, address]) => ({ name, address }));
+      setAvailableLocations(locArray);
+    } catch (error: any) {
+      console.error("Error registering schedule:", error);
+      alert("Failed to add to schedule: " + (error.message || "Unknown error"));
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   const formatTime = (seconds: number) => {
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
@@ -163,6 +323,10 @@ export const CheckIn: React.FC = () => {
   };
 
   const handlePhotoSelect = (e: React.ChangeEvent<HTMLInputElement>, isEnd: boolean) => {
+    alert("Photo upload is temporarily unavailable.");
+    e.target.value = '';
+    return;
+    /*
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
@@ -177,6 +341,7 @@ export const CheckIn: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
+    */
   };
 
   const getRequiredLocation = (): Promise<GeoLocation> => {
@@ -439,7 +604,7 @@ export const CheckIn: React.FC = () => {
             <div className="flex justify-between items-end mb-1">
               <label className="block text-sm font-bold text-gray-700 uppercase tracking-tight">Work Location</label>
               <button 
-                onClick={() => setIsManualLocation(!isManualLocation)}
+                onClick={handleTypeManuallyClick}
                 className="text-xs text-brand-600 font-bold flex items-center gap-1 hover:underline"
               >
                 {isManualLocation ? <ChevronDown size={14}/> : <Edit2 size={14}/>}
@@ -470,21 +635,35 @@ export const CheckIn: React.FC = () => {
               <MapPin className="absolute right-3 top-3.5 text-gray-400 pointer-events-none" size={20} />
             </div>
           </div>
+
+          {isManualLocation && locationName.trim().length > 2 && (
+            <div className="bg-brand-50 p-4 rounded-xl border border-brand-200 flex flex-col sm:flex-row items-center justify-between gap-3 animate-fade-in">
+              <div className="flex items-center gap-3">
+                <div className="bg-white p-2 rounded-lg shadow-sm">
+                  <Calendar className="text-brand-600" size={20} />
+                </div>
+                <div>
+                  <p className="text-xs font-black text-brand-900 uppercase tracking-widest">Recurring Schedule?</p>
+                  <p className="text-[10px] text-brand-600 font-bold">Register this site in your weekly agenda.</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setIsShowingScheduleModal(true)}
+                className="bg-brand-600 text-white px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-brand-700 transition-colors shadow-sm whitespace-nowrap"
+              >
+                Yes, Register Site
+              </button>
+            </div>
+          )}
           
           <div>
-            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">Start Photo (Optional)</label>
-            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition-colors">
+            <label className="block text-sm font-bold text-gray-700 mb-2 uppercase tracking-tight">Start Photo (Temporarily Unavailable)</label>
+            <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-not-allowed bg-gray-100 transition-colors">
                 <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                  {photoPreview ? (
-                    <img src={photoPreview} alt="Preview" className="h-28 object-contain rounded shadow-sm" />
-                  ) : (
-                    <>
-                      <Camera className="w-8 h-8 text-gray-400" />
-                      <p className="text-xs text-gray-400 mt-2">Click to take photo</p>
-                    </>
-                  )}
+                  <Camera className="w-8 h-8 text-gray-300" />
+                  <p className="text-xs text-gray-400 mt-2 italic">Feature disabled</p>
                 </div>
-                <input type="file" className="hidden" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e, false)} />
+                <input type="file" className="hidden" disabled onChange={(e) => handlePhotoSelect(e, false)} />
             </label>
           </div>
         </div>
@@ -502,16 +681,13 @@ export const CheckIn: React.FC = () => {
              </div>
              
              <div className="bg-white/10 p-4 rounded-lg text-left border border-white/5">
-                <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-widest">End Photo (Optional)</label>
-                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/20 border-dashed rounded-lg cursor-pointer hover:bg-white/5 transition-colors">
+                <label className="block text-xs font-bold text-white/70 mb-2 uppercase tracking-widest">End Photo (Temporarily Unavailable)</label>
+                <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-white/20 border-dashed rounded-lg cursor-not-allowed bg-white/5 transition-colors">
                   <div className="flex flex-col items-center justify-center pt-5 pb-6 text-center">
-                    {endPhotoPreview ? (
-                      <img src={endPhotoPreview} alt="Preview" className="h-28 object-contain rounded shadow-sm" />
-                    ) : (
-                      <Camera className="w-8 h-8 text-white/40" />
-                    )}
+                    <Camera className="w-8 h-8 text-white/20" />
+                    <p className="text-[10px] text-white/30 mt-2 italic font-bold">Feature disabled</p>
                   </div>
-                  <input type="file" className="hidden" accept="image/*" capture="environment" onChange={(e) => handlePhotoSelect(e, true)} />
+                  <input type="file" className="hidden" disabled onChange={(e) => handlePhotoSelect(e, true)} />
                 </label>
              </div>
 
@@ -552,6 +728,212 @@ export const CheckIn: React.FC = () => {
           </div>
         )}
       </div>
+
+      {/* Register to Schedule Modal */}
+      {isShowingScheduleModal && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-fade-in text-white border border-slate-700">
+            <div className="p-6 flex justify-between items-center border-b border-slate-800">
+               <div>
+                 <h3 className="text-xl font-black uppercase tracking-tight">Add to Weekly Schedule</h3>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">{locationName}</p>
+               </div>
+               <button onClick={() => setIsShowingScheduleModal(false)} className="text-slate-500 hover:text-white transition-colors">
+                 <X size={28} />
+               </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="space-y-4">
+                <Input 
+                  label="Site Name" 
+                  placeholder="e.g. Downey Tech Hub"
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                  value={locationName} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLocationName(e.target.value)} 
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 font-bold rounded-xl"
+                />
+
+                <Input 
+                  label="Site Address" 
+                  placeholder="Street, Building, Room..."
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                  value={scheduleFormData.address} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScheduleFormData({...scheduleFormData, address: e.target.value})} 
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 font-bold rounded-xl"
+                />
+
+                <div className="space-y-1">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Service Instructions / Notes</label>
+                  <textarea 
+                    className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold min-h-[80px]"
+                    placeholder="Specific tasks for this recurring shift..."
+                    value={scheduleFormData.notes}
+                    onChange={(e) => setScheduleFormData({...scheduleFormData, notes: e.target.value})}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest">Weekly Frequency</label>
+                  <div className="flex flex-wrap gap-1.5">
+                    {DAYS.map((day, idx) => (
+                      <button
+                        key={idx}
+                        type="button"
+                        onClick={() => toggleScheduleDay(idx)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-[9px] font-black transition-all ${scheduleFormData.days.includes(idx) ? 'bg-brand-500 border-brand-500 text-white shadow-lg' : 'bg-slate-800 border-slate-700 text-slate-500 hover:border-slate-600'}`}
+                      >
+                        {day.substring(0, 3).toUpperCase()}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="w-1/2">
+                   <Input 
+                    label="Shift Duration (Hours)" 
+                    type="number" 
+                    min="0.5" 
+                    step="0.5"
+                    labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                    value={scheduleFormData.hoursPerDay} 
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setScheduleFormData({...scheduleFormData, hoursPerDay: Number(e.target.value)})} 
+                    className="bg-slate-800 border-slate-700 text-white font-bold rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <Button 
+                    variant="outline" 
+                    fullWidth 
+                    onClick={() => setIsShowingScheduleModal(false)}
+                    className="border-slate-700 text-slate-400 hover:bg-slate-800 rounded-xl font-black"
+                >
+                    Cancel
+                </Button>
+                <Button 
+                    fullWidth 
+                    onClick={handleRegisterSchedule}
+                    disabled={isProcessing}
+                    className="bg-brand-600 hover:bg-brand-500 rounded-xl font-black shadow-lg"
+                >
+                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <Save size={18} className="mr-2"/>} 
+                    Confirm Registration
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ask to Register Modal */}
+      {isShowingAskRegisterModal && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-slate-900 w-full max-w-md rounded-3xl shadow-2xl overflow-hidden animate-fade-in text-white border border-slate-700">
+            <div className="p-6 flex justify-between items-center border-b border-slate-800">
+               <div>
+                 <h3 className="text-xl font-black uppercase tracking-tight">Register Location?</h3>
+               </div>
+               <button onClick={() => setIsShowingAskRegisterModal(false)} className="text-slate-500 hover:text-white transition-colors">
+                 <X size={28} />
+               </button>
+            </div>
+            
+            <div className="p-6 space-y-6">
+              <p className="text-sm text-slate-300 leading-relaxed font-medium">
+                Would you like to register this new work location to save it for future check-ins?
+              </p>
+
+              <div className="flex gap-3">
+                <Button 
+                    variant="outline" 
+                    fullWidth 
+                    onClick={handleAskRegisterNo}
+                    className="border-slate-700 text-slate-400 hover:bg-slate-800 rounded-xl font-black"
+                >
+                    No
+                </Button>
+                <Button 
+                    fullWidth 
+                    onClick={handleAskRegisterYes}
+                    className="bg-brand-600 hover:bg-brand-500 rounded-xl font-black shadow-lg"
+                >
+                    Yes
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Company/Office Register Modal */}
+      {isShowingCompanyRegisterModal && (
+        <div className="fixed inset-0 bg-brand-900/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+          <div className="bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl overflow-hidden animate-fade-in text-white border border-slate-700">
+            <div className="p-6 flex justify-between items-center border-b border-slate-800">
+               <div>
+                 <h3 className="text-xl font-black uppercase tracking-tight">Register Work Location</h3>
+                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.2em]">Add new work location</p>
+               </div>
+               <button onClick={() => setIsShowingCompanyRegisterModal(false)} className="text-slate-500 hover:text-white transition-colors">
+                 <X size={28} />
+               </button>
+            </div>
+            
+            <div className="p-6 space-y-5">
+              <div className="space-y-4">
+                <Input 
+                  label="Location Name" 
+                  placeholder="e.g. Downey Tech Hub, Central Office..."
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                  value={newOfficeForm.name} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOfficeForm({...newOfficeForm, name: e.target.value})} 
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 font-bold rounded-xl"
+                />
+
+                <Input 
+                  label="Eircode / ZIP" 
+                  placeholder="e.g. D02 X123"
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                  value={newOfficeForm.eircode} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOfficeForm({...newOfficeForm, eircode: e.target.value})} 
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 font-bold rounded-xl"
+                />
+
+                <Input 
+                  label="Full Address" 
+                  placeholder="Street, Number, Neighborhood, City..."
+                  labelClassName="text-slate-400 font-black uppercase text-[10px] tracking-widest"
+                  value={newOfficeForm.address} 
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setNewOfficeForm({...newOfficeForm, address: e.target.value})} 
+                  className="bg-slate-800 border-slate-700 text-white placeholder:text-slate-600 font-bold rounded-xl"
+                />
+              </div>
+
+              <div className="pt-4 flex gap-3">
+                <Button 
+                    variant="outline" 
+                    fullWidth 
+                    onClick={() => setIsShowingCompanyRegisterModal(false)}
+                    className="border-slate-700 text-slate-400 hover:bg-slate-800 rounded-xl font-black"
+                >
+                    Cancel
+                </Button>
+                <Button 
+                    fullWidth 
+                    onClick={handleSaveCompany}
+                    disabled={isProcessing}
+                    className="bg-brand-600 hover:bg-brand-500 rounded-xl font-black shadow-lg"
+                >
+                    {isProcessing ? <Loader2 className="animate-spin mr-2"/> : <Save size={18} className="mr-2"/>} 
+                    Save Location
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
