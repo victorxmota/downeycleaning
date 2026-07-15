@@ -339,7 +339,10 @@ export const Reports: React.FC = () => {
           const start = new Date(rec.startTime).getTime();
           const end = rec.endTime ? new Date(rec.endTime).getTime() : Date.now();
           const pause = rec.totalPausedMs || 0;
-          const duration = msToTime(end - start - pause);
+          let duration = msToTime(end - start - pause);
+          if (pause > 0) {
+            duration += `\n(Pausa: ${msToTime(pause)})`;
+          }
           const checkedSafety = getCheckedItems(rec.safetyChecklist).join(', ');
 
           return [
@@ -589,6 +592,11 @@ export const Reports: React.FC = () => {
                         ) : (
                           <>
                             <div className="font-black text-gray-900">{msToTime(diff)}</div>
+                            {record.totalPausedMs && record.totalPausedMs > 0 ? (
+                              <div className="text-[10px] text-amber-600 font-bold uppercase mt-0.5 whitespace-nowrap">
+                                Pausa: {msToTime(record.totalPausedMs)}
+                              </div>
+                            ) : null}
                             <div className="text-[9px] text-gray-400 font-mono mt-0.5">
                               {format(parseISO(record.startTime), 'HH:mm')} → {record.endTime ? format(parseISO(record.endTime), 'HH:mm') : '...'}
                             </div>
