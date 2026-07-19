@@ -122,7 +122,9 @@ export const CheckIn: React.FC = () => {
         }
       });
       
-      const locArray = Array.from(uniqueLocs.entries()).map(([name, address]) => ({ name, address }));
+      const locArray = Array.from(uniqueLocs.entries())
+        .map(([name, address]) => ({ name, address }))
+        .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
       setAvailableLocations(locArray);
       
       if (locArray.length === 0) {

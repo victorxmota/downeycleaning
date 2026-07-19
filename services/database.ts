@@ -11,7 +11,9 @@ import {
   query, 
   where,
   limit,
-  arrayUnion
+  arrayUnion,
+  writeBatch,
+  FieldValue
 } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./firebase";
@@ -81,8 +83,29 @@ export const Database = {
   },
 
   deleteUser: async (userId: string): Promise<void> => {
-    const userRef = doc(db, USERS_COL, userId);
-    await deleteDoc(userRef);
+    try {
+      const batch = writeBatch(db);
+      
+      // 1. Deletar documento do usuário
+      const userRef = doc(db, USERS_COL, userId);
+      batch.delete(userRef);
+
+      // 2. Deletar agendas associadas
+      const schedulesQuery = query(collection(db, SCHEDULES_COL), where("userId", "==", userId));
+      const schedulesSnap = await getDocs(schedulesQuery);
+      schedulesSnap.forEach((d) => batch.delete(d.ref));
+
+      // 3. Deletar registros de tempo associados
+      const recordsQuery = query(collection(db, RECORDS_COL), where("userId", "==", userId));
+      const recordsSnap = await getDocs(recordsQuery);
+      recordsSnap.forEach((d) => batch.delete(d.ref));
+
+      await batch.commit();
+      console.log(`Usuário ${userId} e dados relacionados removidos com sucesso.`);
+    } catch (error) {
+      console.error("Erro em Database.deleteUser:", error);
+      throw error;
+    }
   },
 
   getUserByAccountId: async (accountId: string): Promise<User | null> => {
@@ -174,7 +197,9 @@ export const Database = {
   getOffices: async (): Promise<Office[]> => {
     const q = query(collection(db, OFFICES_COL));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id } as Office));
+    return querySnapshot.docs
+      .map(doc => ({ ...doc.data(), id: doc.id } as Office))
+      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
   },
 
   addOffice: async (office: Omit<Office, 'id'>): Promise<void> => {
@@ -219,9 +244,13 @@ export const Database = {
   startShift: async (record: Omit<TimeRecord, 'id' | 'photoUrl'>, photo?: File): Promise<TimeRecord> => {
     let photoUrl = "";
     if (photo) {
+      // Photo upload is temporarily disabled
+      console.warn("Photo upload is temporarily unavailable.");
+      /*
       const storageRef = ref(storage, `shifts/${Date.now()}_${photo.name}`);
       await uploadBytes(storageRef, photo);
       photoUrl = await getDownloadURL(storageRef);
+      */
     }
     const data = { ...record, photoUrl, endTime: null, totalPausedMs: 0, isPaused: false };
     const docRef = await addDoc(collection(db, RECORDS_COL), sanitizeData(data));
@@ -249,9 +278,13 @@ export const Database = {
   endShift: async (id: string, updates: Partial<TimeRecord>, photo?: File): Promise<void> => {
     let endPhotoUrl = "";
     if (photo) {
+      // Photo upload is temporarily disabled
+      console.warn("Photo upload is temporarily unavailable.");
+      /*
       const storageRef = ref(storage, `shifts/end_${Date.now()}_${photo.name}`);
       await uploadBytes(storageRef, photo);
       endPhotoUrl = await getDownloadURL(storageRef);
+      */
     }
     const finalUpdates = { ...updates, endPhotoUrl, isPaused: false };
     await updateDoc(doc(db, RECORDS_COL, id), sanitizeData(finalUpdates));
@@ -260,7 +293,6 @@ export const Database = {
   getAllRecords: async (): Promise<TimeRecord[]> => {
     const q = query(collection(db, RECORDS_COL));
     const querySnapshot = await getDocs(q);
-    // Client-side sorting to avoid index requirement
     return querySnapshot.docs
       .map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord))
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
@@ -269,7 +301,6 @@ export const Database = {
   getRecordsByUser: async (userId: string): Promise<TimeRecord[]> => {
     const q = query(collection(db, RECORDS_COL), where("userId", "==", userId));
     const querySnapshot = await getDocs(q);
-    // Client-side sorting to avoid index requirement
     return querySnapshot.docs
       .map(doc => ({ ...doc.data(), id: doc.id } as TimeRecord))
       .sort((a, b) => new Date(b.startTime).getTime() - new Date(a.startTime).getTime());
