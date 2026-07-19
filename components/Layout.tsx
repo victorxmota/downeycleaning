@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell } from 'lucide-react';
-import { UserRole } from '../types';
+import { UserRole, TimeRecord } from '../types';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
 
@@ -13,6 +13,7 @@ interface LayoutProps {
 export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeSession, setActiveSession] = useState<TimeRecord | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -47,6 +48,118 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       };
     }
   }, [user]);
+
+  const getDistanceInMeters = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const fetchActiveSession = async () => {
+    if (!user || user.role !== UserRole.EMPLOYEE) {
+      setActiveSession(null);
+      return;
+    }
+    try {
+      const session = await Database.getActiveSession(user.id);
+      setActiveSession(session);
+    } catch (e) {
+      console.error("Error fetching active session in Layout:", e);
+    }
+  };
+
+  useEffect(() => {
+    if (user && user.role === UserRole.EMPLOYEE) {
+      fetchActiveSession();
+      
+      window.addEventListener('downey:shift-changed', fetchActiveSession);
+      return () => {
+        window.removeEventListener('downey:shift-changed', fetchActiveSession);
+      };
+    } else {
+      setActiveSession(null);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!user || user.role !== UserRole.EMPLOYEE || !activeSession || !activeSession.startLocation) {
+      return;
+    }
+
+    const startLat = activeSession.startLocation.lat;
+    const startLng = activeSession.startLocation.lng;
+
+    if (!startLat || !startLng) return;
+
+    let watchId: number | null = null;
+
+    if (navigator.geolocation) {
+      watchId = navigator.geolocation.watchPosition(
+        async (position) => {
+          const currentLat = position.coords.latitude;
+          const currentLng = position.coords.longitude;
+
+          const distance = getDistanceInMeters(startLat, startLng, currentLat, currentLng);
+
+          if (distance > 200) {
+            const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
+            const alreadySent = localStorage.getItem(alertKey);
+
+            if (!alreadySent) {
+              localStorage.setItem(alertKey, 'true');
+
+              try {
+                // 1. Send notification to the employee
+                await Database.sendNotification({
+                  senderId: 'system',
+                  senderName: 'Location Tracker',
+                  recipientId: user.id,
+                  title: '🚨 Alerta de Distanciamento (Geofence)',
+                  message: `Atenção: Você se afastou ${distance.toFixed(0)}m do local de início do seu turno (${activeSession.locationName}). Por favor, retorne ao local de trabalho de acordo com os protocolos de segurança.`,
+                  createdAt: new Date().toISOString(),
+                  readBy: []
+                });
+
+                // 2. Send notification to all administrators
+                const allUsers = await Database.getAllUsers();
+                const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
+
+                for (const admin of admins) {
+                  await Database.sendNotification({
+                    senderId: 'system',
+                    senderName: 'Location Tracker',
+                    recipientId: admin.id,
+                    title: `🚨 Alerta: Funcionário Fora de Raio (${user.name})`,
+                    message: `O funcionário ${user.name} se afastou mais de 200m do ponto de início do turno (${activeSession.locationName}). Distância atual: ${distance.toFixed(0)}m.`,
+                    createdAt: new Date().toISOString(),
+                    readBy: []
+                  });
+                }
+              } catch (err) {
+                console.error("Error dispatching proximity notifications:", err);
+              }
+            }
+          }
+        },
+        (error) => {
+          console.error("Error watching geolocation in Layout:", error);
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+      );
+    }
+
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+      }
+    };
+  }, [activeSession, user]);
 
   const handleNavigation = (path: string) => {
     navigate(path);

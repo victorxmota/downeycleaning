@@ -400,6 +400,7 @@ export const CheckIn: React.FC = () => {
         const newRecord = await Database.startShift(recordData, photoFile || undefined);
         setActiveSession(newRecord);
         setPhotoFile(null);
+        window.dispatchEvent(new CustomEvent('downey:shift-changed'));
     } catch (error: any) {
         console.error("Failed to start shift:", error);
         alert(error.message || "Could not start the shift. GPS is required.");
@@ -443,6 +444,7 @@ export const CheckIn: React.FC = () => {
       setLocationName('');
       setChecklist(INITIAL_CHECKLIST);
       setCheckoutNotes('');
+      window.dispatchEvent(new CustomEvent('downey:shift-changed'));
     } catch (error: any) {
       console.error(error);
       alert(error.message || "Could not end the shift. GPS location is mandatory for verification.");
@@ -697,7 +699,7 @@ export const CheckIn: React.FC = () => {
              </div>
 
              <div className="bg-white/10 p-4 rounded-lg text-left border border-white/5 space-y-2">
-                <label className="block text-xs font-bold text-white/70 uppercase tracking-widest">Observations (Observações)</label>
+                <label className="block text-xs font-bold text-white/70 uppercase tracking-widest">Observations</label>
                 <textarea
                   className="w-full rounded-lg border border-white/10 bg-white/5 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium placeholder:text-white/30 min-h-[80px] resize-none"
                   placeholder="Add any observations about today's work..."
