@@ -3,7 +3,8 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { User, UserRole } from './types';
 import { Database } from './services/database';
-import { auth, logoutFirebase, onAuthStateChanged } from './services/firebase';
+import { auth, logoutFirebase } from './services/firebase';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Agenda } from './pages/Agenda';
@@ -70,7 +71,7 @@ const App: React.FC = () => {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setIsLoading(true);
       
       if (firebaseUser) {
