@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell } from 'lucide-react';
@@ -22,7 +23,10 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!user) return;
     try {
       const notifications = await Database.getNotificationsForUser(user.id);
-      const unread = notifications.filter(n => !n.readBy.includes(user.id));
+      const unread = notifications.filter(n => {
+        const readBy = Array.isArray(n.readBy) ? n.readBy : [];
+        return !readBy.includes(user.id);
+      });
       setUnreadCount(unread.length);
     } catch (e) {
       console.error(e);
@@ -57,8 +61,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const isActive = (path: string) => location.pathname === path;
 
   const menuItems = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: [UserRole.ADMIN] },
-    { name: 'Schedule', path: user?.role === UserRole.ADMIN ? '/agenda' : '/', icon: Calendar, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
+    { name: 'Dashboard', path: '/', icon: LayoutDashboard, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
+    { name: 'Schedule', path: '/agenda', icon: Calendar, roles: [UserRole.ADMIN, UserRole.EMPLOYEE] },
     { name: 'Check-In/Out', path: '/check-in', icon: ClipboardCheck, roles: [UserRole.EMPLOYEE] },
     { name: 'Notifications', path: '/notifications', icon: Bell, roles: [UserRole.ADMIN, UserRole.EMPLOYEE], badge: unreadCount },
     { name: 'Users', path: '/users', icon: Users, roles: [UserRole.ADMIN] },

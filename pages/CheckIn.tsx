@@ -101,6 +101,7 @@ export const CheckIn: React.FC = () => {
   });
 
   const [checklist, setChecklist] = useState<SafetyChecklist>(INITIAL_CHECKLIST);
+  const [checkoutNotes, setCheckoutNotes] = useState('');
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<number | null>(null);
 
@@ -430,7 +431,8 @@ export const CheckIn: React.FC = () => {
       await Database.endShift(activeSession.id, {
         endTime: new Date().toISOString(),
         endLocation: location,
-        isPaused: false
+        isPaused: false,
+        notes: checkoutNotes.trim()
       }, endPhotoFile || undefined);
       
       setActiveSession(null);
@@ -440,6 +442,7 @@ export const CheckIn: React.FC = () => {
       setEndPhotoFile(null);
       setLocationName('');
       setChecklist(INITIAL_CHECKLIST);
+      setCheckoutNotes('');
     } catch (error: any) {
       console.error(error);
       alert(error.message || "Could not end the shift. GPS location is mandatory for verification.");
@@ -676,7 +679,7 @@ export const CheckIn: React.FC = () => {
           <div className="space-y-6">
              <div className={activeSession.isPaused ? '' : 'animate-pulse'}>
                 <p className="text-white/70 font-bold uppercase tracking-widest text-[10px] mb-1">
-                  {activeSession.isPaused ? 'Shift Paused / Break' : 'Shift in Progress'}
+                  {activeSession.isPaused ? 'Shift on Break' : 'Shift in Progress'}
                 </p>
                 <div className="text-5xl font-mono font-bold tracking-tighter">{formatTime(elapsedTime)}</div>
                 <p className="text-white/60 text-sm mt-2 font-medium">{activeSession.locationName}</p>
@@ -693,6 +696,16 @@ export const CheckIn: React.FC = () => {
                 </label>
              </div>
 
+             <div className="bg-white/10 p-4 rounded-lg text-left border border-white/5 space-y-2">
+                <label className="block text-xs font-bold text-white/70 uppercase tracking-widest">Observations (Observações)</label>
+                <textarea
+                  className="w-full rounded-lg border border-white/10 bg-white/5 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none text-sm font-medium placeholder:text-white/30 min-h-[80px] resize-none"
+                  placeholder="Add any observations about today's work..."
+                  value={checkoutNotes}
+                  onChange={(e) => setCheckoutNotes(e.target.value)}
+                />
+             </div>
+
              <div className="flex gap-4">
                 <Button 
                     onClick={handleTogglePause} 
@@ -701,7 +714,7 @@ export const CheckIn: React.FC = () => {
                     disabled={isProcessing}
                 >
                     {isProcessing ? <Loader2 className="animate-spin mr-2"/> : (activeSession.isPaused ? <Play size={20} className="mr-2"/> : <PauseCircle size={20} className="mr-2"/>)}
-                    {activeSession.isPaused ? 'Resume' : 'Pause'}
+                    {activeSession.isPaused ? 'Resume' : 'Break'}
                 </Button>
 
                 <Button 

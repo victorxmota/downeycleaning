@@ -97,6 +97,7 @@ export const Reports: React.FC = () => {
   const [editingRecordId, setEditingRecordId] = useState<string | null>(null);
   const [editLocation, setEditLocation] = useState('');
   const [editHours, setEditHours] = useState<number>(0);
+  const [editNotes, setEditNotes] = useState('');
   const [isUpdating, setIsUpdating] = useState(false);
   
   // Custom Confirmation Modal State
@@ -268,7 +269,8 @@ export const Reports: React.FC = () => {
 
       await Database.updateRecord(id, {
         locationName: editLocation,
-        endTime: endTime.toISOString()
+        endTime: endTime.toISOString(),
+        notes: editNotes.trim()
       });
       
       await loadData(selectedUserFilter);
@@ -310,6 +312,7 @@ export const Reports: React.FC = () => {
   const startEditing = (record: TimeRecord) => {
     setEditingRecordId(record.id);
     setEditLocation(record.locationName);
+    setEditNotes(record.notes || '');
     const start = new Date(record.startTime).getTime();
     const end = record.endTime ? new Date(record.endTime).getTime() : Date.now();
     const pause = record.totalPausedMs || 0;
@@ -341,13 +344,13 @@ export const Reports: React.FC = () => {
           const pause = rec.totalPausedMs || 0;
           let duration = msToTime(end - start - pause);
           if (pause > 0) {
-            duration += `\n(Pausa: ${msToTime(pause)})`;
+            duration += `\n(Break: ${msToTime(pause)})`;
           }
           const checkedSafety = getCheckedItems(rec.safetyChecklist).join(', ');
 
           return [
             format(parseISO(rec.date), 'dd/MM/yyyy'),
-            rec.locationName,
+            rec.notes ? `${rec.locationName}\n(Obs: ${rec.notes})` : rec.locationName,
             `${format(parseISO(rec.startTime), 'HH:mm')} - ${rec.endTime ? format(parseISO(rec.endTime), 'HH:mm') : 'Active' }`,
             duration,
             checkedSafety || 'None',
@@ -566,15 +569,32 @@ export const Reports: React.FC = () => {
                           {staff?.name || 'Personnel'}
                         </div>
                       </td>
-                      <td className="p-4">
+                      <td className="p-4 text-left">
                         {isEditing ? (
-                          <input 
-                            className="border p-2 rounded-lg text-sm font-bold w-full"
-                            value={editLocation}
-                            onChange={e => setEditLocation(e.target.value)}
-                          />
+                          <div className="space-y-2 max-w-[220px]">
+                            <input 
+                              className="border p-2 rounded-lg text-sm font-bold w-full"
+                              value={editLocation}
+                              onChange={e => setEditLocation(e.target.value)}
+                              placeholder="Location"
+                            />
+                            <textarea
+                              className="border p-2 rounded-lg text-xs font-medium w-full min-h-[60px]"
+                              value={editNotes}
+                              onChange={e => setEditNotes(e.target.value)}
+                              placeholder="Add observation..."
+                            />
+                          </div>
                         ) : (
-                          <div className="font-black text-brand-600 max-w-[200px] leading-tight">{record.locationName}</div>
+                          <div>
+                            <div className="font-black text-brand-600 max-w-[200px] leading-tight">{record.locationName}</div>
+                            {record.notes && (
+                              <div className="text-xs text-gray-500 mt-1 italic font-medium max-w-[220px] break-words bg-gray-50 p-2 rounded border border-gray-100">
+                                <span className="font-bold text-gray-700 not-italic block mb-0.5 text-[9px] uppercase tracking-wider">Obs:</span>
+                                {record.notes}
+                              </div>
+                            )}
+                          </div>
                         )}
                       </td>
                       <td className="p-4">
@@ -594,7 +614,7 @@ export const Reports: React.FC = () => {
                             <div className="font-black text-gray-900">{msToTime(diff)}</div>
                             {record.totalPausedMs && record.totalPausedMs > 0 ? (
                               <div className="text-[10px] text-amber-600 font-bold uppercase mt-0.5 whitespace-nowrap">
-                                Pausa: {msToTime(record.totalPausedMs)}
+                                Break: {msToTime(record.totalPausedMs)}
                               </div>
                             ) : null}
                             <div className="text-[9px] text-gray-400 font-mono mt-0.5">

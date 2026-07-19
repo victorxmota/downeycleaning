@@ -1,7 +1,9 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Database } from '../services/database';
-import { TimeRecord, User } from '../types';
+import { TimeRecord, User, UserRole, ScheduleItem } from '../types';
+import { GoogleGenAI } from "@google/genai";
+import { useAuth } from '../App';
+import { useNavigate } from 'react-router-dom';
 import { 
   Users, 
   MapPin, 
@@ -13,7 +15,11 @@ import {
   Navigation,
   RefreshCw,
   LocateFixed,
-  AlertCircle
+  AlertCircle,
+  Sparkles,
+  ArrowRight,
+  ChevronRight,
+  Smile
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -21,9 +27,20 @@ import { format, parseISO } from 'date-fns';
 declare const L: any;
 
 export const Dashboard: React.FC = () => {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Employee-specific states
+  const [employeeSchedules, setEmployeeSchedules] = useState<ScheduleItem[]>([]);
+  const [employeeActiveSession, setEmployeeActiveSession] = useState<TimeRecord | null>(null);
+  const [isEmployeeLoading, setIsEmployeeLoading] = useState(true);
+
+  // Admin-specific states
   const [activeSessions, setActiveSessions] = useState<(TimeRecord & { user?: User })[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(user?.role === UserRole.ADMIN);
   const [mapReady, setMapReady] = useState(false);
+  const [isGeneratingAi, setIsGeneratingAi] = useState(false);
+  const [aiInsights, setAiInsights] = useState<string | null>(null);
   const [stats, setStats] = useState({
     activeCount: 0,
     totalToday: 0
@@ -59,6 +76,36 @@ export const Dashboard: React.FC = () => {
       console.error("Error loading dashboard data:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // Generate operational insights using Gemini AI
+  const generateAiInsights = async () => {
+    if (activeSessions.length === 0) return;
+    setIsGeneratingAi(true);
+    try {
+      // Create a new GoogleGenAI instance right before making an API call for freshest credentials
+      const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+      const context = activeSessions.map(s => ({
+        personnel: s.user?.name,
+        site: s.locationName,
+        startTime: format(parseISO(s.startTime), 'HH:mm'),
+        safetyCompliance: Object.values(s.safetyChecklist || {}).filter(v => v === true).length + " checks verified"
+      }));
+
+      // Task involves advanced reasoning/analysis of field operations, so gemini-3-pro-preview is selected
+      const response = await ai.models.generateContent({
+        model: 'gemini-3-pro-preview',
+        contents: `Analyze the current Downey Cleaning field operations and provide 2-3 professional, concise insights for the manager. Team status: ${JSON.stringify(context)}.`,
+      });
+
+      // Extract generated text from response.text property (not a method)
+      setAiInsights(response.text || "Operations appearing normal across all active sites.");
+    } catch (error) {
+      console.error("Gemini AI error:", error);
+      setAiInsights("Unable to generate AI insights at this time. Operations monitoring remains active.");
+    } finally {
+      setIsGeneratingAi(false);
     }
   };
 
@@ -123,62 +170,81 @@ export const Dashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    let checkInterval: number;
-    
-    const initMap = () => {
-      if (mapContainerRef.current && !mapRef.current && typeof L !== 'undefined') {
-        try {
-          mapRef.current = L.map(mapContainerRef.current, {
-            zoomControl: false,
-            scrollWheelZoom: true,
-            fadeAnimation: true
-          }).setView([-23.5505, -46.6333], 12);
+    if (!user) return;
 
-          // Professional Esri Tiles (Clean visual similar to Google Maps)
-          L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
-            attribution: 'Tiles &copy; Esri &mdash; Downey Cleaning',
-            maxZoom: 19
-          }).addTo(mapRef.current);
+    if (user.role === UserRole.ADMIN) {
+      let checkInterval: number;
+      
+      const initMap = () => {
+        if (mapContainerRef.current && !mapRef.current && typeof L !== 'undefined') {
+          try {
+            mapRef.current = L.map(mapContainerRef.current, {
+              zoomControl: false,
+              scrollWheelZoom: true,
+              fadeAnimation: true
+            }).setView([-23.5505, -46.6333], 12);
 
-          L.control.zoom({ position: 'topright' }).addTo(mapRef.current);
+            // Professional Street Map Tiles
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+              attribution: 'Tiles &copy; Esri &mdash; Downey Cleaning',
+              maxZoom: 19
+            }).addTo(mapRef.current);
 
-          // Force map size recalculation
-          setTimeout(() => {
-            if (mapRef.current) {
-              mapRef.current.invalidateSize();
-              setMapReady(true);
-              clearInterval(checkInterval);
-            }
-          }, 500);
-        } catch (err) {
-          console.error("Error initializing map:", err);
+            L.control.zoom({ position: 'topright' }).addTo(mapRef.current);
+
+            setTimeout(() => {
+              if (mapRef.current) {
+                mapRef.current.invalidateSize();
+                setMapReady(true);
+                clearInterval(checkInterval);
+              }
+            }, 500);
+          } catch (err) {
+            console.error("Error initializing map:", err);
+          }
         }
-      }
-    };
+      };
 
-    // Retry initialization until Leaflet is loaded
-    checkInterval = window.setInterval(() => {
-      if (typeof L !== 'undefined') {
-        initMap();
-      }
-    }, 300);
+      checkInterval = window.setInterval(() => {
+        if (typeof L !== 'undefined') {
+          initMap();
+        }
+      }, 300);
 
-    loadActiveData();
-    const refreshInterval = setInterval(loadActiveData, 30000); 
+      loadActiveData();
+      const refreshInterval = setInterval(loadActiveData, 30000); 
 
-    const handleResize = () => {
-      if (mapRef.current) {
-        mapRef.current.invalidateSize();
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    
-    return () => {
-      clearInterval(checkInterval);
-      clearInterval(refreshInterval);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, []);
+      const handleResize = () => {
+        if (mapRef.current) {
+          mapRef.current.invalidateSize();
+        }
+      };
+      window.addEventListener('resize', handleResize);
+      
+      return () => {
+        clearInterval(checkInterval);
+        clearInterval(refreshInterval);
+        window.removeEventListener('resize', handleResize);
+      };
+    } else {
+      const loadEmployeeDashboard = async () => {
+        setIsEmployeeLoading(true);
+        try {
+          const [schedules, active] = await Promise.all([
+            Database.getSchedulesByUser(user.id),
+            Database.getActiveSession(user.id)
+          ]);
+          setEmployeeSchedules(schedules);
+          setEmployeeActiveSession(active);
+        } catch (error) {
+          console.error("Error loading employee dashboard:", error);
+        } finally {
+          setIsEmployeeLoading(false);
+        }
+      };
+      loadEmployeeDashboard();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (mapReady && mapRef.current) {
@@ -192,6 +258,270 @@ export const Dashboard: React.FC = () => {
       mapRef.current.fitBounds(bounds, { padding: [60, 60] });
     }
   };
+
+  if (user?.role === UserRole.EMPLOYEE) {
+    if (isEmployeeLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center p-20 space-y-4 text-center">
+          <Loader2 className="animate-spin text-brand-600" size={48} />
+          <p className="text-gray-500 font-black uppercase text-[10px] tracking-[0.2em]">Loading Dashboard...</p>
+        </div>
+      );
+    }
+
+    const todayDayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const todaySchedules = employeeSchedules.filter(s => s.dayOfWeek === todayDayOfWeek);
+
+    const DAYS_EN = [
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday'
+    ];
+
+    return (
+      <div className="space-y-6">
+        {/* Welcome Section */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+          <div>
+            <h1 className="text-3xl font-black text-brand-900 tracking-tight">
+              Hello, {user.name}!
+            </h1>
+            <p className="text-xs text-brand-600 font-bold uppercase tracking-widest mt-1">
+              Employee Dashboard
+            </p>
+          </div>
+          <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-3">
+            <Calendar className="text-brand-500" size={20} />
+            <div>
+              <p className="text-sm font-black text-gray-900 leading-none">
+                {format(new Date(), 'dd/MM/yyyy')}
+              </p>
+              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">
+                {DAYS_EN[todayDayOfWeek]}
+              </p>
+            </div>
+          </div>
+        </header>
+
+        {/* Hero Card: Today's Shift Status */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="md:col-span-2">
+            {employeeActiveSession ? (
+              <div className="bg-gradient-to-br from-brand-900 to-brand-800 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden h-full flex flex-col justify-between">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Activity size={120} />
+                </div>
+                <div>
+                  <span className="bg-green-500/20 text-green-300 border border-green-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 mb-4">
+                    <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    Active Shift
+                  </span>
+                  <h3 className="text-2xl font-black leading-tight tracking-tight">
+                    {employeeActiveSession.locationName}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-brand-300 text-xs mt-1 font-bold">
+                    <MapPin size={14} />
+                    <span>Started at: {format(parseISO(employeeActiveSession.startTime), 'HH:mm')}</span>
+                  </div>
+                </div>
+
+                <div className="mt-6 flex flex-col sm:flex-row gap-3 items-center">
+                  <button
+                    onClick={() => navigate('/check-in')}
+                    className="w-full sm:w-auto bg-white text-brand-900 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-brand-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    Go to Check-In/Out
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : todaySchedules.length > 0 ? (
+              <div className="bg-gradient-to-br from-amber-500 to-amber-600 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden h-full flex flex-col justify-between">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Clock size={120} />
+                </div>
+                <div>
+                  <span className="bg-white/20 text-white border border-white/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 mb-4">
+                    Shift Today
+                  </span>
+                  <h3 className="text-2xl font-black leading-tight tracking-tight">
+                    {todaySchedules[0].locationName}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-amber-100 text-xs mt-1 font-bold">
+                    <MapPin size={14} />
+                    <span className="truncate max-w-[300px]">{todaySchedules[0].address}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-amber-100 text-xs mt-1 font-bold">
+                    <Clock size={14} />
+                    <span>Planned Hours: {todaySchedules[0].hoursPerDay}h</span>
+                  </div>
+                  {todaySchedules[0].notes && (
+                    <p className="text-xs text-amber-50 italic mt-2 bg-black/10 p-3 rounded-xl border border-white/5 leading-relaxed">
+                      "{todaySchedules[0].notes}"
+                    </p>
+                  )}
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    onClick={() => navigate('/check-in')}
+                    className="w-full sm:w-auto bg-white text-amber-700 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-amber-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    Start Shift
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-teal-600 to-teal-700 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden h-full flex flex-col justify-between">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <Smile size={120} />
+                </div>
+                <div>
+                  <span className="bg-white/20 text-white border border-white/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1 mb-4">
+                    Status
+                  </span>
+                  <h3 className="text-2xl font-black leading-tight tracking-tight">
+                    No shifts scheduled today!
+                  </h3>
+                  <p className="text-sm text-teal-100 mt-2 font-medium">
+                    You have no cleaning shifts scheduled for today. Enjoy your day off!
+                  </p>
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    onClick={() => navigate('/agenda')}
+                    className="w-full sm:w-auto bg-white text-teal-800 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-teal-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    View Full Schedule
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Quick stats / Highlights */}
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between">
+            <div>
+              <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-4">Weekly Stats</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-brand-50 p-2 rounded-xl text-brand-600">
+                      <Calendar size={16} />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500">Working days</span>
+                  </div>
+                  <span className="font-black text-gray-900 text-sm">
+                    {Array.from(new Set(employeeSchedules.map(s => s.dayOfWeek))).length} / 7
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between border-b border-gray-50 pb-3">
+                  <div className="flex items-center gap-2">
+                    <div className="bg-brand-50 p-2 rounded-xl text-brand-600">
+                      <Clock size={16} />
+                    </div>
+                    <span className="text-xs font-bold text-gray-500">Total planned hours</span>
+                  </div>
+                  <span className="font-black text-brand-600 text-sm">
+                    {employeeSchedules.reduce((acc, curr) => acc + curr.hoursPerDay, 0)}h
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => navigate('/agenda')}
+              className="mt-6 w-full bg-brand-50 hover:bg-brand-100 text-brand-700 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-colors flex items-center justify-center gap-1"
+            >
+              View Details
+              <ChevronRight size={14} />
+            </button>
+          </div>
+        </div>
+
+        {/* Weekly Schedule Section */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-black text-brand-900 tracking-tight flex items-center gap-2">
+              <Calendar size={20} className="text-brand-500" />
+              Weekly Schedule
+            </h2>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-4">
+            {/* Loop through each day of the week, highlighting today */}
+            {[1, 2, 3, 4, 5, 6, 0].map(dayIdx => {
+              const daySchedules = employeeSchedules.filter(s => s.dayOfWeek === dayIdx);
+              const isToday = dayIdx === todayDayOfWeek;
+
+              return (
+                <div
+                  key={dayIdx}
+                  className={`rounded-2xl p-4 transition-all relative flex flex-col justify-between ${
+                    isToday
+                      ? 'bg-gradient-to-b from-brand-50/70 to-white border-[3px] border-brand-500 shadow-md ring-4 ring-brand-50'
+                      : 'bg-white border border-gray-100 shadow-sm'
+                  }`}
+                >
+                  {isToday && (
+                    <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-brand-500 text-white text-[8px] font-black px-2 py-0.5 rounded-full tracking-widest uppercase">
+                      Today
+                    </span>
+                  )}
+                  
+                  <div>
+                    <p className={`text-center font-black uppercase text-[10px] tracking-wider ${isToday ? 'text-brand-700' : 'text-gray-400'}`}>
+                      {DAYS_EN[dayIdx]}
+                    </p>
+
+                    <div className="mt-3 space-y-2">
+                      {daySchedules.length > 0 ? (
+                        daySchedules.map(sched => (
+                          <div
+                            key={sched.id}
+                            className={`p-2.5 rounded-xl text-left border ${
+                              isToday
+                                ? 'bg-brand-500/5 border-brand-200'
+                                : 'bg-gray-50 border-gray-100'
+                            }`}
+                          >
+                            <p className="font-black text-gray-900 text-[11px] leading-tight truncate" title={sched.locationName}>
+                              {sched.locationName}
+                            </p>
+                            <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-bold">
+                              <Clock size={10} className="text-gray-400 shrink-0" />
+                              <span>{sched.hoursPerDay}h</span>
+                            </div>
+                            {sched.notes && (
+                              <div className="mt-1 text-[8px] text-gray-400 italic truncate" title={sched.notes}>
+                                {sched.notes}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      ) : (
+                        <div className="py-6 text-center text-gray-300 italic text-[10px] font-medium uppercase tracking-wider">
+                          Day Off
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (isLoading && activeSessions.length === 0) {
     return (
@@ -210,6 +540,15 @@ export const Dashboard: React.FC = () => {
           <p className="text-xs text-brand-600 font-bold uppercase tracking-widest mt-1">Global Team Status</p>
         </div>
         <div className="flex gap-4">
+          <button 
+            onClick={generateAiInsights}
+            disabled={isGeneratingAi || activeSessions.length === 0}
+            className="bg-brand-600 text-white px-6 py-3 rounded-2xl shadow-lg border-b-4 border-brand-800 flex items-center gap-2 hover:bg-brand-700 transition-all active:scale-95 disabled:opacity-50"
+          >
+            {isGeneratingAi ? <Loader2 className="animate-spin" size={20} /> : <Sparkles size={20} />}
+            <span className="font-bold text-sm">AI Insights</span>
+          </button>
+
           <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
             <div className="bg-green-100 p-2 rounded-xl text-green-600">
               <Activity size={20} />
@@ -217,15 +556,6 @@ export const Dashboard: React.FC = () => {
             <div>
               <p className="text-2xl font-black text-gray-900 leading-none">{stats.activeCount}</p>
               <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">Online Now</p>
-            </div>
-          </div>
-          <div className="bg-white px-6 py-3 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4">
-            <div className="bg-brand-100 p-2 rounded-xl text-brand-600">
-              <Calendar size={20} />
-            </div>
-            <div>
-              <p className="text-2xl font-black text-gray-900 leading-none">{stats.totalToday}</p>
-              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mt-1">Jobs Today</p>
             </div>
           </div>
           <button 
@@ -238,8 +568,21 @@ export const Dashboard: React.FC = () => {
         </div>
       </header>
 
+      {aiInsights && (
+        <div className="bg-brand-900 text-white p-6 rounded-3xl animate-fade-in relative overflow-hidden shadow-xl">
+           <div className="absolute top-0 right-0 p-6 opacity-10">
+              <Sparkles size={80} />
+           </div>
+           <h3 className="text-brand-400 font-black uppercase text-[10px] tracking-widest flex items-center gap-2 mb-3">
+             <Sparkles size={14} /> Gemini AI Operational Intelligence
+           </h3>
+           <p className="text-sm font-medium leading-relaxed italic border-l-2 border-brand-500 pl-4">
+             "{aiInsights}"
+           </p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Map Panel */}
         <div className="lg:col-span-2 space-y-4">
           <div className="bg-white rounded-3xl p-1 shadow-2xl overflow-hidden relative h-[580px] border-[4px] border-white ring-1 ring-gray-100">
             <div 
@@ -249,7 +592,6 @@ export const Dashboard: React.FC = () => {
               style={{ position: 'relative', height: '100%', width: '100%' }}
             />
             
-            {/* Loading Overlay */}
             {!mapReady && (
               <div className="absolute inset-0 z-[2000] bg-white flex flex-col items-center justify-center text-center">
                  <div className="relative">
@@ -262,7 +604,6 @@ export const Dashboard: React.FC = () => {
               </div>
             )}
 
-            {/* Map Controls */}
             {mapReady && (
               <>
                 <div className="absolute top-4 left-4 z-[1000] flex flex-col gap-2">
@@ -295,7 +636,6 @@ export const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Side List */}
         <div className="space-y-4 flex flex-col h-[580px]">
           <div className="flex items-center justify-between">
              <h3 className="font-black text-gray-900 uppercase text-xs tracking-widest">Team Status</h3>
@@ -333,7 +673,6 @@ export const Dashboard: React.FC = () => {
                         <span className="text-xs font-bold text-gray-500 truncate">{session.locationName}</span>
                       </div>
 
-                      {/* GPS Warning */}
                       {!session.startLocation && (
                         <div className="flex items-center gap-1 mt-2 text-[9px] font-bold text-orange-500 uppercase bg-orange-50 px-2 py-1 rounded w-fit">
                            <AlertCircle size={10} /> GPS location unavailable
