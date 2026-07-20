@@ -48,6 +48,7 @@ export const Agenda: React.FC = () => {
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editHoursValue, setEditHoursValue] = useState<number>(0);
   const [editNotesValue, setEditNotesValue] = useState<string>('');
+  const [editDaysValue, setEditDaysValue] = useState<number[]>([]);
 
   // New Office form state
   const [newOffice, setNewOffice] = useState<Partial<Office>>({
@@ -264,12 +265,39 @@ export const Agenda: React.FC = () => {
   };
 
   const handleUpdateSchedule = async (id: string) => {
+    if (editDaysValue.length === 0) {
+      alert("Please select at least one day for the shift.");
+      return;
+    }
+
     setIsLoading(true);
     try {
+      const originalShift = schedules.find(s => s.id === id);
+      if (!originalShift) {
+        throw new Error("Original shift not found");
+      }
+
+      // Update the original shift with the first selected day
       await Database.updateSchedule(id, { 
         hoursPerDay: editHoursValue,
-        notes: editNotesValue
+        notes: editNotesValue,
+        dayOfWeek: editDaysValue[0]
       });
+
+      // If more than one day is checked, create separate schedule items for the rest of the checked days
+      if (editDaysValue.length > 1) {
+        for (let i = 1; i < editDaysValue.length; i++) {
+          await Database.addSchedule({
+            userId: originalShift.userId,
+            locationName: originalShift.locationName,
+            address: originalShift.address,
+            dayOfWeek: editDaysValue[i],
+            hoursPerDay: editHoursValue,
+            notes: editNotesValue
+          });
+        }
+      }
+
       const targetUserId = isAdmin ? selectedUser : user?.id;
       if (targetUserId) await loadSchedules(targetUserId);
       setEditingScheduleId(null);
@@ -284,17 +312,34 @@ export const Agenda: React.FC = () => {
   const handleDeleteSchedule = async (id: string) => {
     if (window.confirm('Are you sure you want to remove this shift?')) {
       setIsLoading(true);
-      await Database.deleteSchedule(id);
-      const targetUserId = isAdmin ? selectedUser : user?.id;
-      if (targetUserId) await loadSchedules(targetUserId);
-      setIsLoading(false);
+      try {
+        await Database.deleteSchedule(id);
+        const targetUserId = isAdmin ? selectedUser : user?.id;
+        if (targetUserId) {
+          await loadSchedules(targetUserId);
+        }
+      } catch (error) {
+        console.error("Error removing shift:", error);
+        alert("Failed to remove shift: " + (error instanceof Error ? error.message : String(error)));
+      } finally {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const toggleEditScheduleDay = (dayIndex: number) => {
+    setEditDaysValue(prev => 
+      prev.includes(dayIndex) 
+        ? prev.filter(d => d !== dayIndex) 
+        : [...prev, dayIndex]
+    );
   };
 
   const startEditing = (schedule: ScheduleItem) => {
     setEditingScheduleId(schedule.id);
     setEditHoursValue(schedule.hoursPerDay);
     setEditNotesValue(schedule.notes || '');
+    setEditDaysValue([schedule.dayOfWeek]);
   };
 
   const handleOfficeSelectForSchedule = (officeId: string) => {
@@ -560,6 +605,23 @@ export const Agenda: React.FC = () => {
                           onChange={(e) => setEditNotesValue(e.target.value)}
                           placeholder="Updated instructions..."
                         />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Service Days</label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                           {DAYS.map((day, idx) => (
+                             <button
+                               key={idx}
+                               type="button"
+                               onClick={() => toggleEditScheduleDay(idx)}
+                               className={`flex items-center space-x-1 px-2 py-1 rounded-lg border text-[8px] font-black transition-all ${editDaysValue.includes(idx) ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50'}`}
+                             >
+                               {editDaysValue.includes(idx) ? <CheckSquare size={10} /> : <Square size={10} />}
+                               <span>{day.substring(0, 3).toUpperCase()}</span>
+                             </button>
+                           ))}
+                        </div>
                       </div>
 
                       <div className="flex gap-2">

@@ -19,7 +19,9 @@ import {
   Sparkles,
   ArrowRight,
   ChevronRight,
-  Smile
+  Smile,
+  ShieldCheck,
+  Check
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
@@ -33,6 +35,7 @@ export const Dashboard: React.FC = () => {
   // Employee-specific states
   const [employeeSchedules, setEmployeeSchedules] = useState<ScheduleItem[]>([]);
   const [employeeActiveSession, setEmployeeActiveSession] = useState<TimeRecord | null>(null);
+  const [employeeRecords, setEmployeeRecords] = useState<TimeRecord[]>([]);
   const [isEmployeeLoading, setIsEmployeeLoading] = useState(true);
 
   // Admin-specific states
@@ -230,12 +233,48 @@ export const Dashboard: React.FC = () => {
       const loadEmployeeDashboard = async () => {
         setIsEmployeeLoading(true);
         try {
-          const [schedules, active] = await Promise.all([
+          const [schedules, active, records] = await Promise.all([
             Database.getSchedulesByUser(user.id),
-            Database.getActiveSession(user.id)
+            Database.getActiveSession(user.id),
+            Database.getRecordsByUser(user.id)
           ]);
-          setEmployeeSchedules(schedules);
+          setEmployeeRecords(records);
           setEmployeeActiveSession(active);
+
+          // Sort schedules based on the chronological completion order in the last 3 weeks
+          const threeWeeksAgo = new Date();
+          threeWeeksAgo.setDate(threeWeeksAgo.getDate() - 21);
+
+          // Find the most recent completion timestamp for each schedule (by scheduleId or locationName)
+          const lastCompletionTimeMap = new Map<string, number>();
+
+          // Sort records oldest to newest to ensure the latest completion timestamp overwrites previous ones
+          const completedIn3Weeks = records
+            .filter(r => r.endTime && new Date(r.startTime) >= threeWeeksAgo)
+            .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+
+          completedIn3Weeks.forEach(r => {
+            const key = r.scheduleId || r.locationName;
+            lastCompletionTimeMap.set(key, new Date(r.startTime).getTime());
+          });
+
+          // Sort schedules:
+          // Schedules completed in the last 3 weeks go first, ordered chronologically by their last execution.
+          // Schedules not completed in the last 3 weeks go after.
+          const sortedSchedules = [...schedules].sort((a, b) => {
+            const timeA = lastCompletionTimeMap.get(a.id) || lastCompletionTimeMap.get(a.locationName) || 0;
+            const timeB = lastCompletionTimeMap.get(b.id) || lastCompletionTimeMap.get(b.locationName) || 0;
+
+            if (timeA > 0 && timeB > 0) {
+              return timeA - timeB; // Chronological sequence
+            }
+            if (timeA > 0) return -1;
+            if (timeB > 0) return 1;
+
+            return 0;
+          });
+
+          setEmployeeSchedules(sortedSchedules);
         } catch (error) {
           console.error("Error loading employee dashboard:", error);
         } finally {
@@ -268,6 +307,24 @@ export const Dashboard: React.FC = () => {
         </div>
       );
     }
+
+    const isShiftCompletedToday = (sched: ScheduleItem) => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      return employeeRecords.some(r => 
+        r.date === todayStr && 
+        r.endTime && 
+        (r.scheduleId === sched.id || r.locationName === sched.locationName)
+      );
+    };
+
+    const isShiftActiveToday = (sched: ScheduleItem) => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      return employeeRecords.some(r => 
+        r.date === todayStr && 
+        !r.endTime && 
+        (r.scheduleId === sched.id || r.locationName === sched.locationName)
+      );
+    };
 
     const todayDayOfWeek = new Date().getDay(); // 0 = Sunday, 1 = Monday, etc.
     const todaySchedules = employeeSchedules.filter(s => s.dayOfWeek === todayDayOfWeek);
@@ -335,6 +392,42 @@ export const Dashboard: React.FC = () => {
                     className="w-full sm:w-auto bg-white text-brand-900 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-brand-50 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
                     Go to Check-In/Out
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            ) : todaySchedules.length > 0 && isShiftCompletedToday(todaySchedules[0]) ? (
+              <div className="bg-gradient-to-br from-emerald-600 to-teal-700 text-white p-6 rounded-3xl shadow-xl relative overflow-hidden h-full flex flex-col justify-between">
+                <div className="absolute top-0 right-0 p-8 opacity-10">
+                  <ShieldCheck size={120} />
+                </div>
+                <div>
+                  <span className="bg-white/20 text-emerald-100 border border-white/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 mb-4">
+                    <Check size={12} className="stroke-[3]" />
+                    Turno Realizado
+                  </span>
+                  <h3 className="text-2xl font-black leading-tight tracking-tight">
+                    {todaySchedules[0].locationName}
+                  </h3>
+                  <div className="flex items-center gap-1.5 text-emerald-100 text-xs mt-1.5 font-bold">
+                    <MapPin size={14} />
+                    <span className="truncate max-w-[300px]">{todaySchedules[0].address}</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-emerald-100 text-xs mt-1 font-bold">
+                    <Clock size={14} />
+                    <span>Duração Prevista: {todaySchedules[0].hoursPerDay}h</span>
+                  </div>
+                  <p className="text-xs text-emerald-50 mt-3 font-semibold bg-white/10 p-3 rounded-xl border border-white/5 leading-relaxed">
+                    Você já iniciou e finalizou este turno hoje com sucesso. Ótimo trabalho!
+                  </p>
+                </div>
+
+                <div className="mt-6">
+                  <button
+                    onClick={() => navigate('/check-in')}
+                    className="w-full sm:w-auto bg-white text-emerald-800 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-emerald-50 transition-all active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    Ver Detalhes do Registro
                     <ArrowRight size={16} />
                   </button>
                 </div>
@@ -484,29 +577,49 @@ export const Dashboard: React.FC = () => {
 
                     <div className="mt-3 space-y-2">
                       {daySchedules.length > 0 ? (
-                        daySchedules.map(sched => (
-                          <div
-                            key={sched.id}
-                            className={`p-2.5 rounded-xl text-left border ${
-                              isToday
-                                ? 'bg-brand-500/5 border-brand-200'
-                                : 'bg-gray-50 border-gray-100'
-                            }`}
-                          >
-                            <p className="font-black text-gray-900 text-[11px] leading-tight truncate" title={sched.locationName}>
-                              {sched.locationName}
-                            </p>
-                            <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-bold">
-                              <Clock size={10} className="text-gray-400 shrink-0" />
-                              <span>{sched.hoursPerDay}h</span>
-                            </div>
-                            {sched.notes && (
-                              <div className="mt-1 text-[8px] text-gray-400 italic truncate" title={sched.notes}>
-                                {sched.notes}
+                        daySchedules.map(sched => {
+                          const completed = isToday && isShiftCompletedToday(sched);
+                          const active = isToday && isShiftActiveToday(sched);
+                          return (
+                            <div
+                              key={sched.id}
+                              className={`p-2.5 rounded-xl text-left border transition-all ${
+                                completed
+                                  ? 'bg-green-500/10 border-green-500 text-green-900 shadow-sm'
+                                  : active
+                                  ? 'bg-brand-500/10 border-brand-500 text-brand-900 animate-pulse'
+                                  : isToday
+                                  ? 'bg-brand-500/5 border-brand-200'
+                                  : 'bg-gray-50 border-gray-100'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-1">
+                                <p className={`font-black text-[11px] leading-tight truncate ${completed ? 'text-green-800' : 'text-gray-900'}`} title={sched.locationName}>
+                                  {sched.locationName}
+                                </p>
+                                {completed && (
+                                  <span className="bg-green-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 uppercase tracking-tight">
+                                    Done
+                                  </span>
+                                )}
+                                {active && (
+                                  <span className="bg-brand-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shrink-0 uppercase tracking-tight">
+                                    Live
+                                  </span>
+                                )}
                               </div>
-                            )}
-                          </div>
-                        ))
+                              <div className="flex items-center gap-1 mt-1 text-[9px] text-gray-500 font-bold">
+                                <Clock size={10} className={completed ? 'text-green-500 shrink-0' : 'text-gray-400 shrink-0'} />
+                                <span className={completed ? 'text-green-700' : ''}>{sched.hoursPerDay}h</span>
+                              </div>
+                              {sched.notes && (
+                                <div className={`mt-1 text-[8px] italic truncate ${completed ? 'text-green-600/80' : 'text-gray-400'}`} title={sched.notes}>
+                                  {sched.notes}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })
                       ) : (
                         <div className="py-6 text-center text-gray-300 italic text-[10px] font-medium uppercase tracking-wider">
                           Day Off
