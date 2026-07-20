@@ -38,7 +38,7 @@ service cloud.firestore {
     match /notifications/{notificationId} {
       allow read: if request.auth != null && (isAdmin() || isRecipient(resource.data) || isSender(resource.data));
       
-      allow create: if isAdmin();
+      allow create: if request.auth != null;
       
       // Allow any recipient or admin to update the readBy field
       allow update: if request.auth != null && (isAdmin() || isRecipient(resource.data));

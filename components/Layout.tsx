@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell } from 'lucide-react';
+import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell, AlertTriangle } from 'lucide-react';
 import { UserRole, TimeRecord } from '../types';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
@@ -14,6 +14,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [activeSession, setActiveSession] = useState<TimeRecord | null>(null);
+  const [showGeofenceModal, setShowGeofenceModal] = useState(false);
+  const [geofenceDistance, setGeofenceDistance] = useState(0);
+  const [geofenceLocation, setGeofenceLocation] = useState('');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -89,6 +92,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
   useEffect(() => {
     if (!user || user.role !== UserRole.EMPLOYEE || !activeSession || !activeSession.startLocation) {
+      setShowGeofenceModal(false);
       return;
     }
 
@@ -108,6 +112,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           const distance = getDistanceInMeters(startLat, startLng, currentLat, currentLng);
 
           if (distance > 200) {
+            // Actively set state to show on-screen modal warning
+            setGeofenceDistance(distance);
+            setGeofenceLocation(activeSession.locationName || 'Local de Início');
+            setShowGeofenceModal(true);
+
             const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
             const alreadySent = localStorage.getItem(alertKey);
 
@@ -115,18 +124,18 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               localStorage.setItem(alertKey, 'true');
 
               try {
-                // 1. Send notification to the employee
+                // 1. Send detailed notification to the employee
                 await Database.sendNotification({
                   senderId: 'system',
                   senderName: 'Location Tracker',
                   recipientId: user.id,
                   title: '🚨 Alerta de Distanciamento (Geofence)',
-                  message: `Atenção: Você se afastou ${distance.toFixed(0)}m do local de início do seu turno (${activeSession.locationName}). Por favor, retorne ao local de trabalho de acordo com os protocolos de segurança.`,
+                  message: `ALERTA DE DISTANCIAMENTO DE SEGURANÇA:\nVocê se afastou ${distance.toFixed(0)} metros do ponto de início autorizado para o seu turno em "${activeSession.locationName}".\n\nInstruções Claras para Retorno Seguro:\n1. Pare suas atividades atuais imediatamente.\n2. Retorne de forma segura em direção à área de trabalho autorizada em "${activeSession.locationName}".\n3. Mantenha-se dentro do raio de segurança de 200 metros para garantir que sua jornada continue válida.\n4. Caso ocorra erro de sinal de GPS ou outro imprevisto, informe imediatamente o seu supervisor administrativo.`,
                   createdAt: new Date().toISOString(),
                   readBy: []
                 });
 
-                // 2. Send notification to all administrators
+                // 2. Send specific detailed notification to all administrators
                 const allUsers = await Database.getAllUsers();
                 const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
 
@@ -136,7 +145,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     senderName: 'Location Tracker',
                     recipientId: admin.id,
                     title: `🚨 Alerta: Funcionário Fora de Raio (${user.name})`,
-                    message: `O funcionário ${user.name} se afastou mais de 200m do ponto de início do turno (${activeSession.locationName}). Distância atual: ${distance.toFixed(0)}m.`,
+                    message: `ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO:\nO funcionário ${user.name} (${user.email}) se afastou do local de trabalho autorizado para o turno.\n\nDetalhes do Registro:\n- Funcionário: ${user.name}\n- E-mail: ${user.email}\n- Local do Turno: ${activeSession.locationName}\n- Distância Registrada: ${distance.toFixed(0)} metros (Excedeu o raio limite permitido de 200m)\n- Horário do Registro: ${new Date().toLocaleTimeString('pt-BR')}`,
                     createdAt: new Date().toISOString(),
                     readBy: []
                   });
@@ -145,6 +154,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 console.error("Error dispatching proximity notifications:", err);
               }
             }
+          } else {
+            // Auto-hide the modal if they return to the safe area
+            setShowGeofenceModal(false);
           }
         },
         (error) => {
@@ -266,6 +278,48 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      {/* Geofence Alert Modal */}
+      {showGeofenceModal && (
+        <div className="fixed inset-0 bg-red-950/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
+          <div className="bg-white max-w-lg w-full rounded-3xl p-8 shadow-2xl border-2 border-red-500 animate-bounce-soft relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
+            
+            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+              <AlertTriangle size={36} className="text-red-600 animate-pulse" />
+            </div>
+            
+            <h3 className="text-2xl font-black text-red-600 text-center uppercase tracking-tight">
+              🚨 Alerta de Distanciamento!
+            </h3>
+            
+            <p className="text-gray-700 text-center text-sm mt-3 font-semibold leading-relaxed">
+              Você se afastou <span className="text-red-600 font-extrabold text-base underline">{geofenceDistance.toFixed(0)} metros</span> do ponto de início autorizado para o seu turno em <span className="font-extrabold text-gray-900">"{geofenceLocation}"</span>.
+            </p>
+
+            <div className="bg-red-50/70 border border-red-100 rounded-2xl p-5 mt-6 space-y-3">
+              <h4 className="text-xs font-black uppercase text-red-800 tracking-wider">
+                Instruções de Segurança para Retorno:
+              </h4>
+              <ul className="text-xs text-red-700 font-bold space-y-2.5 list-decimal list-inside leading-relaxed">
+                <li>Pare suas atividades atuais imediatamente.</li>
+                <li>Retorne com segurança em direção ao local de trabalho autorizado: <span className="underline font-black text-red-800">"{geofenceLocation}"</span>.</li>
+                <li>Mantenha-se dentro do raio de segurança de 200 metros para que suas horas de serviço continuem sendo validadas.</li>
+                <li>Em caso de imprevistos ou falhas de sinal de GPS, avise imediatamente o seu supervisor administrativo.</li>
+              </ul>
+            </div>
+
+            <div className="mt-8 flex gap-4">
+              <button 
+                onClick={() => setShowGeofenceModal(false)}
+                className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-wider rounded-2xl shadow-lg transition-all"
+              >
+                Entendido, estou retornando
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
