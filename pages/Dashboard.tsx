@@ -404,7 +404,7 @@ export const Dashboard: React.FC = () => {
                 <div>
                   <span className="bg-white/20 text-emerald-100 border border-white/30 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-wider inline-flex items-center gap-1.5 mb-4">
                     <Check size={12} className="stroke-[3]" />
-                    Turno Realizado
+                    Shift Completed
                   </span>
                   <h3 className="text-2xl font-black leading-tight tracking-tight">
                     {todaySchedules[0].locationName}
@@ -415,10 +415,10 @@ export const Dashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-1.5 text-emerald-100 text-xs mt-1 font-bold">
                     <Clock size={14} />
-                    <span>Duração Prevista: {todaySchedules[0].hoursPerDay}h</span>
+                    <span>Expected Duration: {todaySchedules[0].hoursPerDay}h</span>
                   </div>
                   <p className="text-xs text-emerald-50 mt-3 font-semibold bg-white/10 p-3 rounded-xl border border-white/5 leading-relaxed">
-                    Você já iniciou e finalizou este turno hoje com sucesso. Ótimo trabalho!
+                    You have already started and completed this shift today. Great job!
                   </p>
                 </div>
 
@@ -427,7 +427,7 @@ export const Dashboard: React.FC = () => {
                     onClick={() => navigate('/check-in')}
                     className="w-full sm:w-auto bg-white text-emerald-800 px-6 py-3 rounded-2xl shadow-lg font-black text-sm hover:bg-emerald-50 transition-all active:scale-95 flex items-center justify-center gap-2"
                   >
-                    Ver Detalhes do Registro
+                    View Time Record Details
                     <ArrowRight size={16} />
                   </button>
                 </div>

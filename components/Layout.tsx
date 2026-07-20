@@ -114,7 +114,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           if (distance > 200) {
             // Actively set state to show on-screen modal warning
             setGeofenceDistance(distance);
-            setGeofenceLocation(activeSession.locationName || 'Local de Início');
+            setGeofenceLocation(activeSession.locationName || 'Starting Location');
             setShowGeofenceModal(true);
 
             const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
@@ -129,8 +129,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   senderId: 'system',
                   senderName: 'Location Tracker',
                   recipientId: user.id,
-                  title: '🚨 Alerta de Distanciamento (Geofence)',
-                  message: `ALERTA DE DISTANCIAMENTO DE SEGURANÇA:\nVocê se afastou ${distance.toFixed(0)} metros do ponto de início autorizado para o seu turno em "${activeSession.locationName}".\n\nInstruções Claras para Retorno Seguro:\n1. Pare suas atividades atuais imediatamente.\n2. Retorne de forma segura em direção à área de trabalho autorizada em "${activeSession.locationName}".\n3. Mantenha-se dentro do raio de segurança de 200 metros para garantir que sua jornada continue válida.\n4. Caso ocorra erro de sinal de GPS ou outro imprevisto, informe imediatamente o seu supervisor administrativo.`,
+                  title: '🚨 Geofence Distance Warning',
+                  message: `SAFETY DISTANCE WARNING:\nYou have moved ${distance.toFixed(0)} meters away from the authorized starting point for your shift at "${activeSession.locationName}".\n\nClear Instructions for Safe Return:\n1. Stop your current activities immediately.\n2. Return safely towards the authorized work area at "${activeSession.locationName}".\n3. Stay within the 200-meter radius to ensure your shift hours continue to be validated.\n4. In case of GPS signal errors or other unexpected issues, notify your administrative supervisor immediately.`,
                   createdAt: new Date().toISOString(),
                   readBy: []
                 });
@@ -144,8 +144,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                     senderId: 'system',
                     senderName: 'Location Tracker',
                     recipientId: admin.id,
-                    title: `🚨 Alerta: Funcionário Fora de Raio (${user.name})`,
-                    message: `ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO:\nO funcionário ${user.name} (${user.email}) se afastou do local de trabalho autorizado para o turno.\n\nDetalhes do Registro:\n- Funcionário: ${user.name}\n- E-mail: ${user.email}\n- Local do Turno: ${activeSession.locationName}\n- Distância Registrada: ${distance.toFixed(0)} metros (Excedeu o raio limite permitido de 200m)\n- Horário do Registro: ${new Date().toLocaleTimeString('pt-BR')}`,
+                    title: `🚨 Alert: Employee Out of Bounds (${user.name})`,
+                    message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) has moved away from the authorized work location for their shift.\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${activeSession.locationName}\n- Recorded Distance: ${distance.toFixed(0)} meters (Exceeded the allowed radius limit of 200m)\n- Record Time: ${new Date().toLocaleTimeString('en-US')}`,
                     createdAt: new Date().toISOString(),
                     readBy: []
                   });
@@ -290,22 +290,22 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             </div>
             
             <h3 className="text-2xl font-black text-red-600 text-center uppercase tracking-tight">
-              🚨 Alerta de Distanciamento!
+              🚨 Distance Warning!
             </h3>
             
             <p className="text-gray-700 text-center text-sm mt-3 font-semibold leading-relaxed">
-              Você se afastou <span className="text-red-600 font-extrabold text-base underline">{geofenceDistance.toFixed(0)} metros</span> do ponto de início autorizado para o seu turno em <span className="font-extrabold text-gray-900">"{geofenceLocation}"</span>.
+              You have moved <span className="text-red-600 font-extrabold text-base underline">{geofenceDistance.toFixed(0)} meters</span> away from the authorized starting point for your shift at <span className="font-extrabold text-gray-900">"{geofenceLocation}"</span>.
             </p>
 
             <div className="bg-red-50/70 border border-red-100 rounded-2xl p-5 mt-6 space-y-3">
               <h4 className="text-xs font-black uppercase text-red-800 tracking-wider">
-                Instruções de Segurança para Retorno:
+                Safety Instructions for Return:
               </h4>
               <ul className="text-xs text-red-700 font-bold space-y-2.5 list-decimal list-inside leading-relaxed">
-                <li>Pare suas atividades atuais imediatamente.</li>
-                <li>Retorne com segurança em direção ao local de trabalho autorizado: <span className="underline font-black text-red-800">"{geofenceLocation}"</span>.</li>
-                <li>Mantenha-se dentro do raio de segurança de 200 metros para que suas horas de serviço continuem sendo validadas.</li>
-                <li>Em caso de imprevistos ou falhas de sinal de GPS, avise imediatamente o seu supervisor administrativo.</li>
+                <li>Stop your current activities immediately.</li>
+                <li>Return safely towards the authorized work location: <span className="underline font-black text-red-800">"{geofenceLocation}"</span>.</li>
+                <li>Stay within the 200-meter safety radius to ensure your shift hours continue to be validated.</li>
+                <li>In case of unexpected issues or GPS signal failures, notify your administrative supervisor immediately.</li>
               </ul>
             </div>
 
@@ -314,7 +314,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                 onClick={() => setShowGeofenceModal(false)}
                 className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-wider rounded-2xl shadow-lg transition-all"
               >
-                Entendido, estou retornando
+                Understood, I am returning
               </button>
             </div>
           </div>
