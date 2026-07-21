@@ -27,6 +27,66 @@ import {
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 
+const translateNotification = (title: string, message: string): { title: string, message: string } => {
+  let translatedTitle = title;
+  let translatedMessage = message;
+
+  // Translate Title
+  if (title.includes('Alerta de Distanciamento (Geofence)')) {
+    translatedTitle = '🚨 Geofence Distance Warning';
+  } else if (title.includes('Alerta: Funcionário Fora de Raio')) {
+    translatedTitle = title.replace('Alerta: Funcionário Fora de Raio', 'Alert: Employee Out of Bounds');
+  } else if (title.includes('ALERTA DE DISTANCIAMENTO DE SEGURANÇA')) {
+    translatedTitle = '🚨 Geofence Distance Warning';
+  }
+
+  // Translate Message Pattern 1 (from the image)
+  if (message.includes('Você se afastou') && message.includes('do local de início do seu turno')) {
+    const match = message.match(/Atenção:\s*Você\s*se\s*afastou\s*(\d+m?)\s*do\s*local\s*de\s*início\s*do\s*seu\s*turno\s*\(([^)]+)\)\.\s*Por\s*favor,\s*retorne\s*ao\s*local\s*de\s*trabalho\s*de\s*acordo\s*com\s*os\s*protocolos\s*de\s*segurança\./i);
+    if (match) {
+      const distance = match[1];
+      const location = match[2];
+      translatedMessage = `Attention: You have moved ${distance} away from the starting point of your shift (${location}). Please return to the workplace in accordance with safety protocols.`;
+    } else {
+      translatedMessage = message
+        .replace(/Atenção:/g, 'Attention:')
+        .replace(/Você se afastou/g, 'You have moved')
+        .replace(/do local de início do seu turno/g, 'away from the starting point of your shift')
+        .replace(/Por favor, retorne ao local de trabalho de acordo com os protocolos de segurança\./g, 'Please return to the workplace in accordance with safety protocols.');
+    }
+  }
+
+  // Translate Message Pattern 2 (detailed warning message from Layout.tsx)
+  if (message.includes('ALERTA DE DISTANCIAMENTO DE SEGURANÇA')) {
+    translatedMessage = message
+      .replace(/ALERTA DE DISTANCIAMENTO DE SEGURANÇA:/g, 'SAFETY DISTANCE WARNING:')
+      .replace(/Você se afastou/g, 'You have moved')
+      .replace(/metros do ponto de início autorizado para o seu turno em/g, 'meters away from the authorized starting point for your shift at')
+      .replace(/Instruções Claras para Retorno Seguro:/g, 'Clear Instructions for Safe Return:')
+      .replace(/1\. Pare suas atividades atuais imediatamente\./g, '1. Stop your current activities immediately.')
+      .replace(/2\. Retorne de forma segura em direção à área de trabalho autorizada em/g, '2. Return safely towards the authorized work area at')
+      .replace(/3\. Mantenha-se dentro do raio de segurança de 200 metros para garantir que sua jornada continue válida\./g, '3. Stay within the 200-meter safety radius to ensure your shift hours continue to be validated.')
+      .replace(/4\. Caso ocorra erro de sinal de GPS ou outro imprevisto, informe imediatamente o seu supervisor administrativo\./g, '4. In case of GPS signal errors or other unexpected issues, notify your administrative supervisor immediately.');
+  }
+
+  // Translate Message Pattern 3 (admin alert)
+  if (message.includes('ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO')) {
+    translatedMessage = message
+      .replace(/ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO:/g, 'ADMINISTRATIVE GEOLOCATION ALERT:')
+      .replace(/O funcionário/g, 'Employee')
+      .replace(/se afastou do local de trabalho autorizado para o turno\./g, 'has moved away from the authorized work location for their shift.')
+      .replace(/Detalhes do Registro:/g, 'Record Details:')
+      .replace(/- Funcionário:/g, '- Employee:')
+      .replace(/- E-mail:/g, '- Email:')
+      .replace(/- Local do Turno:/g, '- Shift Location:')
+      .replace(/- Distância Registrada:/g, '- Recorded Distance:')
+      .replace(/metros \(Excedeu o raio limite permitido de 200m\)/g, 'meters (Exceeded the allowed radius limit of 200m)')
+      .replace(/- Horário do Registro:/g, '- Record Time:');
+  }
+
+  return { title: translatedTitle, message: translatedMessage };
+};
+
 export const Notifications: React.FC = () => {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -364,6 +424,8 @@ export const Notifications: React.FC = () => {
               const isMySent = notif.senderId === user?.id;
               const isUnread = !isRead && activeTab === 'received';
               
+              const { title: displayTitle, message: displayMessage } = translateNotification(notif.title, notif.message);
+              
               return (
                 <div 
                   key={notif.id} 
@@ -408,11 +470,11 @@ export const Notifications: React.FC = () => {
                     
                     <div className="flex-1 min-w-0 pr-10">
                       <h4 className={`font-black text-lg tracking-tight mb-1 ${isUnread ? 'text-brand-900' : 'text-gray-700'}`}>
-                        {notif.title}
+                        {displayTitle}
                       </h4>
                       
                       <p className={`text-sm leading-relaxed mb-4 whitespace-pre-wrap ${isUnread ? 'text-brand-800 font-bold' : 'text-gray-500 font-medium'}`}>
-                        {notif.message}
+                        {displayMessage}
                       </p>
                       
                       <div className="flex flex-wrap items-center gap-4 border-t border-gray-50 pt-4">

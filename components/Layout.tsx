@@ -112,11 +112,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           const distance = getDistanceInMeters(startLat, startLng, currentLat, currentLng);
 
           if (distance > 200) {
-            // Actively set state to show on-screen modal warning
-            setGeofenceDistance(distance);
-            setGeofenceLocation(activeSession.locationName || 'Starting Location');
-            setShowGeofenceModal(true);
-
             const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
             const alreadySent = localStorage.getItem(alertKey);
 
@@ -278,48 +273,6 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
-
-      {/* Geofence Alert Modal */}
-      {showGeofenceModal && (
-        <div className="fixed inset-0 bg-red-950/85 backdrop-blur-md z-[999] flex items-center justify-center p-4">
-          <div className="bg-white max-w-lg w-full rounded-3xl p-8 shadow-2xl border-2 border-red-500 animate-bounce-soft relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-2 bg-red-500" />
-            
-            <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-              <AlertTriangle size={36} className="text-red-600 animate-pulse" />
-            </div>
-            
-            <h3 className="text-2xl font-black text-red-600 text-center uppercase tracking-tight">
-              🚨 Distance Warning!
-            </h3>
-            
-            <p className="text-gray-700 text-center text-sm mt-3 font-semibold leading-relaxed">
-              You have moved <span className="text-red-600 font-extrabold text-base underline">{geofenceDistance.toFixed(0)} meters</span> away from the authorized starting point for your shift at <span className="font-extrabold text-gray-900">"{geofenceLocation}"</span>.
-            </p>
-
-            <div className="bg-red-50/70 border border-red-100 rounded-2xl p-5 mt-6 space-y-3">
-              <h4 className="text-xs font-black uppercase text-red-800 tracking-wider">
-                Safety Instructions for Return:
-              </h4>
-              <ul className="text-xs text-red-700 font-bold space-y-2.5 list-decimal list-inside leading-relaxed">
-                <li>Stop your current activities immediately.</li>
-                <li>Return safely towards the authorized work location: <span className="underline font-black text-red-800">"{geofenceLocation}"</span>.</li>
-                <li>Stay within the 200-meter safety radius to ensure your shift hours continue to be validated.</li>
-                <li>In case of unexpected issues or GPS signal failures, notify your administrative supervisor immediately.</li>
-              </ul>
-            </div>
-
-            <div className="mt-8 flex gap-4">
-              <button 
-                onClick={() => setShowGeofenceModal(false)}
-                className="w-full h-14 bg-red-600 hover:bg-red-700 text-white font-black uppercase tracking-wider rounded-2xl shadow-lg transition-all"
-              >
-                Understood, I am returning
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };
