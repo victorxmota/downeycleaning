@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell, AlertTriangle } from 'lucide-react';
+import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, LogOut, LayoutDashboard, Bell, AlertTriangle, ArrowRight } from 'lucide-react';
 import { UserRole, TimeRecord } from '../types';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
@@ -17,6 +17,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
   const [showGeofenceModal, setShowGeofenceModal] = useState(false);
   const [geofenceDistance, setGeofenceDistance] = useState(0);
   const [geofenceLocation, setGeofenceLocation] = useState('');
+  const [activeToast, setActiveToast] = useState<{ title: string; message: string } | null>(null);
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -43,11 +44,27 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       
       // Listen for notification changes anywhere in the app
       window.addEventListener('downey:notifications-updated', fetchUnread);
+
+      const handleToast = (e: Event) => {
+        const customEvent = e as CustomEvent;
+        const detail = customEvent.detail;
+        if (!detail) return;
+        
+        if (detail.recipientId === 'all' || detail.recipientId === user?.id || user?.role === UserRole.ADMIN) {
+          setActiveToast({
+            title: detail.title || 'New Notification',
+            message: detail.message || ''
+          });
+        }
+      };
+
+      window.addEventListener('downey:toast-notification', handleToast);
       
       const interval = setInterval(fetchUnread, 60000); // Background check every minute
       return () => {
         clearInterval(interval);
         window.removeEventListener('downey:notifications-updated', fetchUnread);
+        window.removeEventListener('downey:toast-notification', handleToast);
       };
     }
   }, [user]);
@@ -113,10 +130,13 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
 
           if (distance > 200) {
             const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
-            const alreadySent = localStorage.getItem(alertKey);
+            const lastSentTimeStr = localStorage.getItem(alertKey);
+            const now = Date.now();
+            const lastSentTime = lastSentTimeStr ? parseInt(lastSentTimeStr, 10) : 0;
 
-            if (!alreadySent) {
-              localStorage.setItem(alertKey, 'true');
+            // Send notification if never sent or if > 3 minutes (180000ms) have passed
+            if (!lastSentTime || (now - lastSentTime > 180000)) {
+              localStorage.setItem(alertKey, now.toString());
 
               try {
                 // 1. Send detailed notification to the employee
@@ -150,7 +170,9 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               }
             }
           } else {
-            // Auto-hide the modal if they return to the safe area
+            // Reset lock when back within safe boundary
+            const alertKey = `downey_shift_alert_sent_${activeSession.id}`;
+            localStorage.removeItem(alertKey);
             setShowGeofenceModal(false);
           }
         },
@@ -273,6 +295,39 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           {children}
         </div>
       </main>
+
+      {/* Floating Toast Notification Alert */}
+      {activeToast && (
+        <div className="fixed top-5 right-5 z-[9999] max-w-sm w-[calc(100vw-40px)] bg-brand-900 text-white p-5 rounded-2xl shadow-2xl border-2 border-amber-400 animate-slide-down flex flex-col gap-2.5">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-amber-400 font-black text-xs uppercase tracking-wider">
+              <Bell size={16} className="animate-bounce" />
+              <span>New Notification</span>
+            </div>
+            <button 
+              onClick={() => setActiveToast(null)} 
+              className="text-gray-400 hover:text-white p-1 rounded-lg transition-colors"
+              title="Close"
+            >
+              <X size={16} />
+            </button>
+          </div>
+          <h4 className="font-extrabold text-sm text-white line-clamp-1">{activeToast.title}</h4>
+          <p className="text-xs text-brand-100 line-clamp-2 leading-relaxed">{activeToast.message}</p>
+          <div className="pt-2 flex justify-end">
+            <button
+              onClick={() => {
+                setActiveToast(null);
+                navigate('/notifications');
+              }}
+              className="bg-brand-600 hover:bg-brand-500 text-white text-xs font-bold px-3.5 py-2 rounded-xl flex items-center gap-2 transition-all shadow-md active:scale-95"
+            >
+              <span>View Notifications</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

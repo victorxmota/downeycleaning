@@ -140,6 +140,15 @@ export const Database = {
 
       const docRef = await addDoc(collection(db, NOTIFICATIONS_COL), dataToSave);
       notifyNotificationChange();
+
+      window.dispatchEvent(new CustomEvent('downey:toast-notification', {
+        detail: {
+          recipientId: dataToSave.recipientId,
+          title: dataToSave.title,
+          message: dataToSave.message
+        }
+      }));
+
       return docRef;
     } catch (error: any) {
       console.error("Database Error:", error);
