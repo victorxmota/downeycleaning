@@ -145,7 +145,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   senderName: 'Location Tracker',
                   recipientId: user.id,
                   title: '🚨 Geofence Distance Warning',
-                  message: `SAFETY DISTANCE WARNING:\nYou have moved ${distance.toFixed(0)} meters away from the authorized starting point for your shift at "${activeSession.locationName}".\n\nClear Instructions for Safe Return:\n1. Stop your current activities immediately.\n2. Return safely towards the authorized work area at "${activeSession.locationName}".\n3. Stay within the 200-meter radius to ensure your shift hours continue to be validated.\n4. In case of GPS signal errors or other unexpected issues, notify your administrative supervisor immediately.`,
+                  message: `Attention: You have moved ${distance.toFixed(0)} away from the starting point of your shift "${activeSession.locationName}". Please return to the workplace in accordance with safety protocols.`,
                   createdAt: new Date().toISOString(),
                   readBy: []
                 });
