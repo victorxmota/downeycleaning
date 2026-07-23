@@ -134,8 +134,8 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             const now = Date.now();
             const lastSentTime = lastSentTimeStr ? parseInt(lastSentTimeStr, 10) : 0;
 
-            // Send notification if never sent or if > 3 minutes (180000ms) have passed
-            if (!lastSentTime || (now - lastSentTime > 30000)) {
+            // Send notification if never sent or if > 15 minutes (900000ms) have passed
+            if (!lastSentTime || (now - lastSentTime > 900000)) {
               localStorage.setItem(alertKey, now.toString());
 
               try {
