@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
-import { TimeRecord, SafetyChecklist, GeoLocation } from '../types';
+import { TimeRecord, SafetyChecklist, GeoLocation, UserRole } from '../types';
 import { Button } from '../components/ui/Button';
 import { Input } from '../components/ui/Input';
 import { 
@@ -105,23 +105,30 @@ export const CheckIn: React.FC = () => {
   const [elapsedTime, setElapsedTime] = useState(0);
   const timerRef = useRef<number | null>(null);
 
-  const loadAvailableLocations = async (userId: string) => {
+  const loadAvailableLocations = async (userId: string, extraLoc?: { name: string, address: string }) => {
     try {
       const schedules = await Database.getSchedulesByUser(userId);
-      const offices = await Database.getOffices();
       
-      const uniqueLocs = new Map();
+      const uniqueLocs = new Map<string, string>();
       schedules.forEach(s => {
-        if (!uniqueLocs.has(s.locationName)) {
-          uniqueLocs.set(s.locationName, s.address);
+        if (s.locationName && !uniqueLocs.has(s.locationName)) {
+          uniqueLocs.set(s.locationName, s.address || '');
         }
       });
-      
-      offices.forEach(o => {
-        if (!uniqueLocs.has(o.name)) {
-          uniqueLocs.set(o.name, o.address);
-        }
-      });
+
+      // Fallback for ADMIN users if they have no individual scheduled locations
+      if (user?.role === UserRole.ADMIN && uniqueLocs.size === 0) {
+        const offices = await Database.getOffices();
+        offices.forEach(o => {
+          if (o.name && !uniqueLocs.has(o.name)) {
+            uniqueLocs.set(o.name, o.address || '');
+          }
+        });
+      }
+
+      if (extraLoc && extraLoc.name) {
+        uniqueLocs.set(extraLoc.name, extraLoc.address || '');
+      }
       
       const locArray = Array.from(uniqueLocs.entries())
         .map(([name, address]) => ({ name, address }))
@@ -174,7 +181,10 @@ export const CheckIn: React.FC = () => {
       setIsShowingCompanyRegisterModal(false);
 
       if (user) {
-        await loadAvailableLocations(user.id);
+        await loadAvailableLocations(user.id, {
+          name: newOfficeForm.name.trim(),
+          address: newOfficeForm.address.trim()
+        });
       }
 
       setLocationName(newOfficeForm.name.trim());
