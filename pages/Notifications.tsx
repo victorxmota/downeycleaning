@@ -33,11 +33,15 @@ const translateNotification = (title: string, message: string): { title: string,
 
   // Translate Title
   if (title.includes('Alerta de Distanciamento (Geofence)')) {
-    translatedTitle = '🚨 Geofence Distance Warning';
+    translatedTitle = '🚨 Geofence Distance Warning (500m)';
   } else if (title.includes('Alerta: Funcionário Fora de Raio')) {
     translatedTitle = title.replace('Alerta: Funcionário Fora de Raio', 'Alert: Employee Out of Bounds');
   } else if (title.includes('ALERTA DE DISTANCIAMENTO DE SEGURANÇA')) {
     translatedTitle = '🚨 Geofence Distance Warning';
+  } else if (title.includes('Checkout Automático Realizado')) {
+    translatedTitle = '🚨 Automatic Checkout Completed';
+  } else if (title.includes('Checkout Automático:')) {
+    translatedTitle = title.replace('Checkout Automático:', 'Automatic Checkout:');
   }
 
   // Translate Message Pattern 1 (from the image)

@@ -348,14 +348,17 @@ export const Reports: React.FC = () => {
           }
           const checkedSafety = getCheckedItems(rec.safetyChecklist).join(', ');
 
+          const isAutoCheckout = rec.notes?.toLowerCase().includes('checkout realizado automaticamente') || rec.notes?.toLowerCase().includes('automatic checkout');
+          const statusText = rec.endTime ? (isAutoCheckout ? 'AUTO CHECKOUT (>1KM)' : 'COMPLETED') : 'IN PROGRESS';
+
           return [
             format(parseISO(rec.date), 'dd/MM/yyyy'),
-            rec.notes ? `${rec.locationName}\n(Obs: ${rec.notes})` : rec.locationName,
+            rec.notes ? `${rec.locationName}\n(Notes: ${rec.notes})` : rec.locationName,
             `${format(parseISO(rec.startTime), 'HH:mm')} - ${rec.endTime ? format(parseISO(rec.endTime), 'HH:mm') : 'Active' }`,
             duration,
             checkedSafety || 'None',
             `GPS IN: ${formatGPS(rec.startLocation)}\nGPS OUT: ${formatGPS(rec.endLocation)}`,
-            rec.endTime ? 'COMPLETED' : 'IN PROGRESS'
+            statusText
           ];
       });
 
@@ -590,7 +593,7 @@ export const Reports: React.FC = () => {
                             <div className="font-black text-brand-600 max-w-[200px] leading-tight">{record.locationName}</div>
                             {record.notes && (
                               <div className="text-xs text-gray-500 mt-1 italic font-medium max-w-[220px] break-words bg-gray-50 p-2 rounded border border-gray-100">
-                                <span className="font-bold text-gray-700 not-italic block mb-0.5 text-[9px] uppercase tracking-wider">Obs:</span>
+                                <span className="font-bold text-gray-700 not-italic block mb-0.5 text-[9px] uppercase tracking-wider">Notes:</span>
                                 {record.notes}
                               </div>
                             )}
@@ -696,9 +699,28 @@ export const Reports: React.FC = () => {
                          </div>
                       </td>
                       <td className="p-4 text-center">
-                        <span className={`inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider ${record.endTime ? 'bg-green-100 text-green-700' : 'bg-brand-accent text-brand-900 animate-pulse'}`}>
-                          {record.endTime ? 'VERIFIED' : 'LIVE'}
-                        </span>
+                        {(() => {
+                          const isAutoCheckout = record.notes?.toLowerCase().includes('checkout realizado automaticamente') || record.notes?.toLowerCase().includes('automatic checkout');
+                          if (!record.endTime) {
+                            return (
+                              <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-brand-accent text-brand-900 animate-pulse">
+                                LIVE
+                              </span>
+                            );
+                          }
+                          if (isAutoCheckout) {
+                            return (
+                              <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300" title="Checkout automático por afastamento > 1km">
+                                AUTO CHECKOUT (&gt;1KM)
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-green-100 text-green-700">
+                              VERIFIED
+                            </span>
+                          );
+                        })()}
                       </td>
                       {isAdmin && (
                         <td className="p-4">
