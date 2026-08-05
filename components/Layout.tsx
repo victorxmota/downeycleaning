@@ -139,49 +139,58 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
             // 1. Automatic Checkout (> 1 km / 1000 meters)
             isAutoCheckingOutRef.current = true;
             try {
+              const sessionId = activeSession.id;
+              const sessionLocation = activeSession.locationName;
               const existingNotes = activeSession.notes ? activeSession.notes + '\n' : '';
               const autoCheckoutNote = `${existingNotes}[Checkout realizado automaticamente: Afastamento > 1 km (${distance.toFixed(0)}m)]`;
 
-              await Database.endShift(activeSession.id, {
+              // End shift in database
+              await Database.endShift(sessionId, {
                 endTime: new Date().toISOString(),
                 endLocation: { lat: currentLat, lng: currentLng },
                 isPaused: false,
                 notes: autoCheckoutNote
               });
 
-              // Notification for employee
-              await Database.sendNotification({
-                senderId: 'system',
-                senderName: 'Location Tracker',
-                recipientId: user.id,
-                title: '🚨 Checkout Automático Realizado',
-                message: `Attention: Your shift at "${activeSession.locationName}" was automatically checked out because you moved ${distance.toFixed(0)}m (${(distance / 1000).toFixed(2)} km) away from the check-in point (exceeded 1 km maximum radius).`,
-                createdAt: new Date().toISOString(),
-                readBy: []
-              });
+              // Clean up alert flags and update state IMMEDIATELY
+              const alertKey500 = `downey_shift_alert_500m_sent_${sessionId}`;
+              localStorage.removeItem(alertKey500);
 
-              // Notification for admins
-              const allUsers = await Database.getAllUsers();
-              const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
+              setActiveSession(null);
+              setShowGeofenceModal(false);
+              window.dispatchEvent(new CustomEvent('downey:shift-changed'));
 
-              for (const admin of admins) {
+              // Send notifications asynchronously without blocking checkout completion
+              try {
+                // Notification for employee
                 await Database.sendNotification({
                   senderId: 'system',
                   senderName: 'Location Tracker',
-                  recipientId: admin.id,
-                  title: `🚨 Automatic Checkout: ${user.name} (> 1 km)`,
-                  message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) had an AUTOMATIC CHECKOUT triggered after moving more than 1 km away from their shift location.\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${activeSession.locationName}\n- Recorded Distance: ${distance.toFixed(0)} meters (${(distance / 1000).toFixed(2)} km)\n- Automatic Checkout Time: ${new Date().toLocaleTimeString('en-US')}`,
+                  recipientId: user.id,
+                  title: '🚨 Checkout Automático Realizado',
+                  message: `Attention: Your shift at "${sessionLocation}" was automatically checked out because you moved ${distance.toFixed(0)}m (${(distance / 1000).toFixed(2)} km) away from the check-in point (exceeded 1 km maximum radius).`,
                   createdAt: new Date().toISOString(),
                   readBy: []
                 });
+
+                // Notification for admins
+                const allUsers = await Database.getAllUsers();
+                const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
+
+                for (const admin of admins) {
+                  await Database.sendNotification({
+                    senderId: 'system',
+                    senderName: 'Location Tracker',
+                    recipientId: admin.id,
+                    title: `🚨 Automatic Checkout: ${user.name} (> 1 km)`,
+                    message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) had an AUTOMATIC CHECKOUT triggered after moving more than 1 km away from their shift location.\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${sessionLocation}\n- Recorded Distance: ${distance.toFixed(0)} meters (${(distance / 1000).toFixed(2)} km)\n- Automatic Checkout Time: ${new Date().toLocaleTimeString('en-US')}`,
+                    createdAt: new Date().toISOString(),
+                    readBy: []
+                  });
+                }
+              } catch (notifErr) {
+                console.error("Error sending auto-checkout notifications:", notifErr);
               }
-
-              const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
-              localStorage.removeItem(alertKey500);
-
-              window.dispatchEvent(new CustomEvent('downey:shift-changed'));
-              setActiveSession(null);
-              setShowGeofenceModal(false);
             } catch (err) {
               console.error("Error during automatic checkout:", err);
               isAutoCheckingOutRef.current = false;

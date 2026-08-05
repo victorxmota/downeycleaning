@@ -223,11 +223,13 @@ export const Dashboard: React.FC = () => {
         }
       };
       window.addEventListener('resize', handleResize);
+      window.addEventListener('downey:shift-changed', loadActiveData);
       
       return () => {
         clearInterval(checkInterval);
         clearInterval(refreshInterval);
         window.removeEventListener('resize', handleResize);
+        window.removeEventListener('downey:shift-changed', loadActiveData);
       };
     } else {
       const loadEmployeeDashboard = async () => {
@@ -282,6 +284,11 @@ export const Dashboard: React.FC = () => {
         }
       };
       loadEmployeeDashboard();
+
+      window.addEventListener('downey:shift-changed', loadEmployeeDashboard);
+      return () => {
+        window.removeEventListener('downey:shift-changed', loadEmployeeDashboard);
+      };
     }
   }, [user]);
 

@@ -198,22 +198,35 @@ export const CheckIn: React.FC = () => {
     }
   };
 
+  const refreshActiveSession = async () => {
+    if (!user) return;
+    try {
+      const session = await Database.getActiveSession(user.id);
+      if (session) {
+        setActiveSession(session);
+        setLocationName(session.locationName);
+        if (session.safetyChecklist) {
+          setChecklist({ ...INITIAL_CHECKLIST, ...session.safetyChecklist });
+        }
+        setPhotoPreview(session.photoUrl || null);
+      } else {
+        setActiveSession(null);
+        setLocationName('');
+        setChecklist(INITIAL_CHECKLIST);
+        setPhotoPreview(null);
+        setCheckoutNotes('');
+      }
+    } catch (e) {
+      console.error("Error refreshing active session in CheckIn:", e);
+    }
+  };
+
   useEffect(() => {
     const init = async () => {
       if (!user) return;
       try {
-        const session = await Database.getActiveSession(user.id);
-        if (session) {
-          setActiveSession(session);
-          setLocationName(session.locationName);
-          if (session.safetyChecklist) {
-            setChecklist({ ...INITIAL_CHECKLIST, ...session.safetyChecklist });
-          }
-          setPhotoPreview(session.photoUrl || null);
-        }
-
+        await refreshActiveSession();
         await loadAvailableLocations(user.id);
-
         checkGpsAvailability();
       } catch (e) {
         console.error("Error initializing check-in", e);
@@ -222,6 +235,15 @@ export const CheckIn: React.FC = () => {
       }
     };
     init();
+
+    const handleShiftChanged = () => {
+      refreshActiveSession();
+    };
+
+    window.addEventListener('downey:shift-changed', handleShiftChanged);
+    return () => {
+      window.removeEventListener('downey:shift-changed', handleShiftChanged);
+    };
   }, [user]);
 
   const checkGpsAvailability = () => {
