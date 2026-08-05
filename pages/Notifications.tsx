@@ -23,73 +23,12 @@ import {
   Filter,
   RefreshCw,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Smartphone,
+  CheckCircle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
-
-const translateNotification = (title: string, message: string): { title: string, message: string } => {
-  let translatedTitle = title;
-  let translatedMessage = message;
-
-  // Translate Title
-  if (title.includes('Alerta de Distanciamento (Geofence)')) {
-    translatedTitle = '🚨 Geofence Distance Warning (500m)';
-  } else if (title.includes('Alerta: Funcionário Fora de Raio')) {
-    translatedTitle = title.replace('Alerta: Funcionário Fora de Raio', 'Alert: Employee Out of Bounds');
-  } else if (title.includes('ALERTA DE DISTANCIAMENTO DE SEGURANÇA')) {
-    translatedTitle = '🚨 Geofence Distance Warning';
-  } else if (title.includes('Checkout Automático Realizado')) {
-    translatedTitle = '🚨 Automatic Checkout Completed';
-  } else if (title.includes('Checkout Automático:')) {
-    translatedTitle = title.replace('Checkout Automático:', 'Automatic Checkout:');
-  }
-
-  // Translate Message Pattern 1 (from the image)
-  if (message.includes('Você se afastou') && message.includes('do local de início do seu turno')) {
-    const match = message.match(/Atenção:\s*Você\s*se\s*afastou\s*(\d+m?)\s*do\s*local\s*de\s*início\s*do\s*seu\s*turno\s*\(([^)]+)\)\.\s*Por\s*favor,\s*retorne\s*ao\s*local\s*de\s*trabalho\s*de\s*acordo\s*com\s*os\s*protocolos\s*de\s*segurança\./i);
-    if (match) {
-      const distance = match[1];
-      const location = match[2];
-      translatedMessage = `Attention: You have moved ${distance} away from the starting point of your shift (${location}). Please return to the workplace in accordance with safety protocols.`;
-    } else {
-      translatedMessage = message
-        .replace(/Atenção:/g, 'Attention:')
-        .replace(/Você se afastou/g, 'You have moved')
-        .replace(/do local de início do seu turno/g, 'away from the starting point of your shift')
-        .replace(/Por favor, retorne ao local de trabalho de acordo com os protocolos de segurança\./g, 'Please return to the workplace in accordance with safety protocols.');
-    }
-  }
-
-  // Translate Message Pattern 2 (detailed warning message from Layout.tsx)
-  if (message.includes('ALERTA DE DISTANCIAMENTO DE SEGURANÇA')) {
-    translatedMessage = message
-      .replace(/ALERTA DE DISTANCIAMENTO DE SEGURANÇA:/g, 'SAFETY DISTANCE WARNING:')
-      .replace(/Você se afastou/g, 'You have moved')
-      .replace(/metros do ponto de início autorizado para o seu turno em/g, 'meters away from the authorized starting point for your shift at')
-      .replace(/Instruções Claras para Retorno Seguro:/g, 'Clear Instructions for Safe Return:')
-      .replace(/1\. Pare suas atividades atuais imediatamente\./g, '1. Stop your current activities immediately.')
-      .replace(/2\. Retorne de forma segura em direção à área de trabalho autorizada em/g, '2. Return safely towards the authorized work area at')
-      .replace(/3\. Mantenha-se dentro do raio de segurança de 200 metros para garantir que sua jornada continue válida\./g, '3. Stay within the 200-meter safety radius to ensure your shift hours continue to be validated.')
-      .replace(/4\. Caso ocorra erro de sinal de GPS ou outro imprevisto, informe imediatamente o seu supervisor administrativo\./g, '4. In case of GPS signal errors or other unexpected issues, notify your administrative supervisor immediately.');
-  }
-
-  // Translate Message Pattern 3 (admin alert)
-  if (message.includes('ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO')) {
-    translatedMessage = message
-      .replace(/ALERTA DE GEOLOCALIZAÇÃO ADMINISTRATIVO:/g, 'ADMINISTRATIVE GEOLOCATION ALERT:')
-      .replace(/O funcionário/g, 'Employee')
-      .replace(/se afastou do local de trabalho autorizado para o turno\./g, 'has moved away from the authorized work location for their shift.')
-      .replace(/Detalhes do Registro:/g, 'Record Details:')
-      .replace(/- Funcionário:/g, '- Employee:')
-      .replace(/- E-mail:/g, '- Email:')
-      .replace(/- Local do Turno:/g, '- Shift Location:')
-      .replace(/- Distância Registrada:/g, '- Recorded Distance:')
-      .replace(/metros \(Excedeu o raio limite permitido de 200m\)/g, 'meters (Exceeded the allowed radius limit of 200m)')
-      .replace(/- Horário do Registro:/g, '- Record Time:');
-  }
-
-  return { title: translatedTitle, message: translatedMessage };
-};
+import { requestFCMToken } from '../services/fcm';
 
 export const Notifications: React.FC = () => {
   const { user } = useAuth();
@@ -115,6 +54,32 @@ export const Notifications: React.FC = () => {
     title: '',
     message: ''
   });
+
+  // FCM Push Notifications State
+  const [fcmStatus, setFcmStatus] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
+  const [isEnablingFcm, setIsEnablingFcm] = useState(false);
+
+  const handleEnableFcm = async () => {
+    setIsEnablingFcm(true);
+    try {
+      const { permission, token } = await requestFCMToken();
+      setFcmStatus(permission);
+      if (token && user?.id) {
+        await Database.saveUserFcmToken(user.id, token);
+        alert('Mobile push notifications (FCM) enabled successfully on this device!');
+      } else if (permission === 'denied') {
+        alert('Notification permission blocked by browser. Please allow notifications in your browser settings.');
+      } else if (permission === 'granted') {
+        alert('Notifications enabled successfully!');
+      }
+    } catch (err) {
+      console.error("Error enabling FCM:", err);
+    } finally {
+      setIsEnablingFcm(false);
+    }
+  };
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
@@ -298,6 +263,49 @@ export const Notifications: React.FC = () => {
         )}
       </header>
 
+      {/* FCM Push Notification Banner */}
+      <div className="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-900 text-white p-4.5 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-brand-700">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md shrink-0">
+            <Smartphone className="text-brand-300" size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm tracking-wide flex items-center gap-2">
+              Mobile / Device Push Notifications (FCM)
+              {fcmStatus === 'granted' && (
+                <span className="bg-green-500/20 text-green-300 border border-green-500/40 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                  <CheckCircle size={12} /> Active
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-brand-200 mt-0.5">
+              Receive instant push notifications on your mobile device for automatic system alerts and admin messages.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleEnableFcm}
+          disabled={isEnablingFcm}
+          className={`shrink-0 text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md ${
+            fcmStatus === 'granted'
+              ? 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+              : 'bg-brand-500 hover:bg-brand-400 text-white border-none animate-pulse'
+          }`}
+        >
+          {isEnablingFcm ? (
+            <>
+              <Loader2 size={14} className="animate-spin mr-2" /> Enabling FCM...
+            </>
+          ) : fcmStatus === 'granted' ? (
+            'Renew FCM Token'
+          ) : (
+            'Enable Mobile FCM'
+          )}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Composition Panel (Admin Only) */}
         {isAdmin && (
@@ -428,7 +436,8 @@ export const Notifications: React.FC = () => {
               const isMySent = notif.senderId === user?.id;
               const isUnread = !isRead && activeTab === 'received';
               
-              const { title: displayTitle, message: displayMessage } = translateNotification(notif.title, notif.message);
+              const displayTitle = notif.title;
+              const displayMessage = notif.message;
               
               return (
                 <div 

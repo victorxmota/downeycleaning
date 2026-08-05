@@ -5,6 +5,7 @@ import { Menu, X, Calendar, ClipboardCheck, User as UserIcon, Users, BarChart2, 
 import { UserRole, TimeRecord } from '../types';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
+import { registerFCMServiceWorker, requestFCMToken, initForegroundFCMListener } from '../services/fcm';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -43,6 +44,23 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (user) {
       fetchUnread();
       
+      // Register FCM service worker and fetch token if permitted
+      registerFCMServiceWorker();
+      if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+        requestFCMToken().then(({ token }) => {
+          if (token && user.id) {
+            Database.saveUserFcmToken(user.id, token);
+          }
+        }).catch(err => console.warn("FCM Auto Init error:", err));
+      }
+
+      let cleanupFCM = () => {};
+      initForegroundFCMListener(() => {
+        fetchUnread();
+      }).then(unsub => {
+        cleanupFCM = unsub;
+      });
+
       // Listen for notification changes anywhere in the app
       window.addEventListener('downey:notifications-updated', fetchUnread);
 
@@ -64,6 +82,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       const interval = setInterval(fetchUnread, 60000); // Background check every minute
       return () => {
         clearInterval(interval);
+        cleanupFCM();
         window.removeEventListener('downey:notifications-updated', fetchUnread);
         window.removeEventListener('downey:toast-notification', handleToast);
       };
@@ -142,7 +161,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
               const sessionId = activeSession.id;
               const sessionLocation = activeSession.locationName;
               const existingNotes = activeSession.notes ? activeSession.notes + '\n' : '';
-              const autoCheckoutNote = `${existingNotes}[Checkout realizado automaticamente: Afastamento > 1 km (${distance.toFixed(0)}m)]`;
+              const autoCheckoutNote = `${existingNotes}[Automatic checkout triggered: Distance > 1 km (${distance.toFixed(0)}m)]`;
 
               // End shift in database
               await Database.endShift(sessionId, {
@@ -167,7 +186,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
                   senderId: 'system',
                   senderName: 'Location Tracker',
                   recipientId: user.id,
-                  title: '🚨 Checkout Automático Realizado',
+                  title: '🚨 Automatic Checkout Completed',
                   message: `Attention: Your shift at "${sessionLocation}" was automatically checked out because you moved ${distance.toFixed(0)}m (${(distance / 1000).toFixed(2)} km) away from the check-in point (exceeded 1 km maximum radius).`,
                   createdAt: new Date().toISOString(),
                   readBy: []

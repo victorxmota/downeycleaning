@@ -19,6 +19,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage } from "./firebase";
 import type { FirebaseUser } from "./firebase";
 import { User, UserRole, ScheduleItem, TimeRecord, Office, AppNotification } from "../types";
+import { sendDevicePushNotification } from "./fcm";
 
 const USERS_COL = 'users';
 const SCHEDULES_COL = 'schedules';
@@ -86,7 +87,7 @@ export const Database = {
     try {
       const batch = writeBatch(db);
       
-      // 1. Deletar documento do usuário
+      // 1. Delete user document
       const userRef = doc(db, USERS_COL, userId);
       batch.delete(userRef);
 
@@ -101,9 +102,9 @@ export const Database = {
       recordsSnap.forEach((d) => batch.delete(d.ref));
 
       await batch.commit();
-      console.log(`Usuário ${userId} e dados relacionados removidos com sucesso.`);
+      console.log(`User ${userId} and related data removed successfully.`);
     } catch (error) {
-      console.error("Erro em Database.deleteUser:", error);
+      console.error("Error in Database.deleteUser:", error);
       throw error;
     }
   },
@@ -124,6 +125,18 @@ export const Database = {
       ...doc.data(),
       id: doc.id
     } as User));
+  },
+
+  saveUserFcmToken: async (userId: string, token: string): Promise<void> => {
+    try {
+      const userRef = doc(db, USERS_COL, userId);
+      await updateDoc(userRef, {
+        fcmToken: token,
+        fcmTokens: arrayUnion(token)
+      });
+    } catch (e) {
+      console.error("Error saving FCM token to user:", e);
+    }
   },
 
   sendNotification: async (notification: Omit<AppNotification, 'id'>) => {
@@ -148,6 +161,9 @@ export const Database = {
           message: dataToSave.message
         }
       }));
+
+      // Trigger native FCM/Device Push notification on user's device
+      sendDevicePushNotification(dataToSave.title, dataToSave.message);
 
       return docRef;
     } catch (error: any) {

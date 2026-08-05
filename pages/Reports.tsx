@@ -710,7 +710,7 @@ export const Reports: React.FC = () => {
                           }
                           if (isAutoCheckout) {
                             return (
-                              <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300" title="Checkout automático por afastamento > 1km">
+                              <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-300" title="Automatic checkout due to distance > 1km">
                                 AUTO CHECKOUT (&gt;1KM)
                               </span>
                             );
