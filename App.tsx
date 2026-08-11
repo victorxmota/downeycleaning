@@ -4,7 +4,7 @@ import { HashRouter, Routes, Route, Navigate, useLocation } from 'react-router-d
 import { User, UserRole } from './types';
 import { Database } from './services/database';
 import { auth, logoutFirebase } from './services/firebase';
-import { onAuthStateChanged } from 'firebase/auth';
+import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { Layout } from './components/Layout';
 import { Login } from './pages/Login';
 import { Agenda } from './pages/Agenda';
@@ -71,7 +71,7 @@ const App: React.FC = () => {
   }
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth as any, async (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser: FirebaseUser | null) => {
       setIsLoading(true);
       
       if (firebaseUser) {
@@ -105,7 +105,7 @@ const App: React.FC = () => {
             path="/" 
             element={
               <ProtectedRoute>
-                {user?.role === UserRole.ADMIN ? <Dashboard /> : <Agenda />}
+                <Dashboard />
               </ProtectedRoute>
             } 
           />

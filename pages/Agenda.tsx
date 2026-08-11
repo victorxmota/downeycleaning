@@ -48,6 +48,7 @@ export const Agenda: React.FC = () => {
   const [editingScheduleId, setEditingScheduleId] = useState<string | null>(null);
   const [editHoursValue, setEditHoursValue] = useState<number>(0);
   const [editNotesValue, setEditNotesValue] = useState<string>('');
+  const [editDaysValue, setEditDaysValue] = useState<number[]>([]);
 
   // New Office form state
   const [newOffice, setNewOffice] = useState<Partial<Office>>({
@@ -65,6 +66,7 @@ export const Agenda: React.FC = () => {
   const [selectedDays, setSelectedDays] = useState<number[]>([]);
 
   const isAdmin = user?.role === UserRole.ADMIN;
+  const canAddSchedule = isAdmin || user?.role === UserRole.EMPLOYEE;
 
   useEffect(() => {
     const initData = async () => {
@@ -263,12 +265,39 @@ export const Agenda: React.FC = () => {
   };
 
   const handleUpdateSchedule = async (id: string) => {
+    if (editDaysValue.length === 0) {
+      alert("Please select at least one day for the shift.");
+      return;
+    }
+
     setIsLoading(true);
     try {
+      const originalShift = schedules.find(s => s.id === id);
+      if (!originalShift) {
+        throw new Error("Original shift not found");
+      }
+
+      // Update the original shift with the first selected day
       await Database.updateSchedule(id, { 
         hoursPerDay: editHoursValue,
-        notes: editNotesValue
+        notes: editNotesValue,
+        dayOfWeek: editDaysValue[0]
       });
+
+      // If more than one day is checked, create separate schedule items for the rest of the checked days
+      if (editDaysValue.length > 1) {
+        for (let i = 1; i < editDaysValue.length; i++) {
+          await Database.addSchedule({
+            userId: originalShift.userId,
+            locationName: originalShift.locationName,
+            address: originalShift.address,
+            dayOfWeek: editDaysValue[i],
+            hoursPerDay: editHoursValue,
+            notes: editNotesValue
+          });
+        }
+      }
+
       const targetUserId = isAdmin ? selectedUser : user?.id;
       if (targetUserId) await loadSchedules(targetUserId);
       setEditingScheduleId(null);
@@ -283,17 +312,34 @@ export const Agenda: React.FC = () => {
   const handleDeleteSchedule = async (id: string) => {
     if (window.confirm('Are you sure you want to remove this shift?')) {
       setIsLoading(true);
-      await Database.deleteSchedule(id);
-      const targetUserId = isAdmin ? selectedUser : user?.id;
-      if (targetUserId) await loadSchedules(targetUserId);
-      setIsLoading(false);
+      try {
+        await Database.deleteSchedule(id);
+        const targetUserId = isAdmin ? selectedUser : user?.id;
+        if (targetUserId) {
+          await loadSchedules(targetUserId);
+        }
+      } catch (error) {
+        console.error("Error removing shift:", error);
+        alert("Failed to remove shift: " + (error instanceof Error ? error.message : String(error)));
+      } finally {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const toggleEditScheduleDay = (dayIndex: number) => {
+    setEditDaysValue(prev => 
+      prev.includes(dayIndex) 
+        ? prev.filter(d => d !== dayIndex) 
+        : [...prev, dayIndex]
+    );
   };
 
   const startEditing = (schedule: ScheduleItem) => {
     setEditingScheduleId(schedule.id);
     setEditHoursValue(schedule.hoursPerDay);
     setEditNotesValue(schedule.notes || '');
+    setEditDaysValue([schedule.dayOfWeek]);
   };
 
   const handleOfficeSelectForSchedule = (officeId: string) => {
@@ -325,49 +371,49 @@ export const Agenda: React.FC = () => {
         
         <div className="flex flex-wrap gap-2 items-center">
             {isAdmin && (
-              <>
-                <Button 
-                  variant="outline" 
-                  onClick={() => setViewMode(viewMode === 'agenda' ? 'offices' : 'agenda')}
-                  className="rounded-xl font-bold border-brand-600 text-brand-600"
+              <Button 
+                variant="outline" 
+                onClick={() => setViewMode(viewMode === 'agenda' ? 'offices' : 'agenda')}
+                className="rounded-xl font-bold border-brand-600 text-brand-600"
+              >
+                {viewMode === 'agenda' ? <Building2 size={18} className="mr-2" /> : <Calendar size={18} className="mr-2" />}
+                {viewMode === 'agenda' ? 'Manage Sites' : 'View Schedule'}
+              </Button>
+            )}
+            {isAdmin && viewMode === 'agenda' && (
+              <div className="flex flex-col mr-2">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Employee View</span>
+                <select 
+                  className="border rounded-xl px-3 py-2 bg-white text-sm font-bold border-gray-200 outline-none focus:ring-2 focus:ring-brand-500"
+                  value={selectedUser}
+                  onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
                 >
-                  {viewMode === 'agenda' ? <Building2 size={18} className="mr-2" /> : <Calendar size={18} className="mr-2" />}
-                  {viewMode === 'agenda' ? 'Manage Sites' : 'View Schedule'}
-                </Button>
-                {viewMode === 'agenda' && (
-                  <div className="flex flex-col mr-2">
-                    <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Employee View</span>
-                    <select 
-                      className="border rounded-xl px-3 py-2 bg-white text-sm font-bold border-gray-200 outline-none focus:ring-2 focus:ring-brand-500"
-                      value={selectedUser}
-                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
-                    >
-                      <option value={user?.id}>My Own Agenda</option>
-                      {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-                
-                {viewMode === 'agenda' ? (
-                  <Button 
-                    onClick={() => setIsAddingSchedule(!isAddingSchedule)}
-                    className={`${isAddingSchedule ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
-                  >
-                    {isAddingSchedule ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
-                    {isAddingSchedule ? 'Cancel' : 'New Shift'}
-                  </Button>
-                ) : (
-                  <Button 
-                    onClick={() => setIsAddingOffice(!isAddingOffice)}
-                    className={`${isAddingOffice ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
-                  >
-                    {isAddingOffice ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
-                    {isAddingOffice ? 'Cancel' : 'New Site'}
-                  </Button>
-                )}
-              </>
+                  <option value={user?.id}>My Own Agenda</option>
+                  {users.map(u => (
+                    <option key={u.id} value={u.id}>{u.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            
+            {viewMode === 'agenda' && canAddSchedule && (
+              <Button 
+                onClick={() => setIsAddingSchedule(!isAddingSchedule)}
+                className={`${isAddingSchedule ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
+              >
+                {isAddingSchedule ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
+                {isAddingSchedule ? 'Cancel' : 'New Shift'}
+              </Button>
+            )}
+
+            {viewMode !== 'agenda' && isAdmin && (
+              <Button 
+                onClick={() => setIsAddingOffice(!isAddingOffice)}
+                className={`${isAddingOffice ? 'bg-gray-100 text-gray-600' : 'bg-brand-600'} rounded-xl font-bold`}
+              >
+                {isAddingOffice ? <X size={18} className="mr-2" /> : <Plus size={18} className="mr-2" />}
+                {isAddingOffice ? 'Cancel' : 'New Site'}
+              </Button>
             )}
         </div>
       </header>
@@ -382,7 +428,7 @@ export const Agenda: React.FC = () => {
             <div className="text-4xl font-black text-brand-600 tracking-tighter">{calculateWeeklyHours()}h</div>
           </div>
 
-          {isAddingSchedule && isAdmin && (
+          {isAddingSchedule && canAddSchedule && (
             <div className="bg-slate-900 p-6 rounded-2xl border border-slate-700 space-y-4 animate-fade-in text-white shadow-2xl relative overflow-hidden">
               <div className="absolute top-0 right-0 p-8 opacity-5">
                 <Calendar size={120} />
@@ -394,17 +440,26 @@ export const Agenda: React.FC = () => {
               </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
-                <div className="md:col-span-2">
-                  <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Target Personnel</label>
-                  <select 
-                    className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
-                    value={selectedUser}
-                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
-                  >
-                    <option value={user?.id}>Assign to myself</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
-                  </select>
-                </div>
+                {isAdmin ? (
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Target Personnel</label>
+                    <select 
+                      className="w-full rounded-xl border-slate-700 bg-slate-800 text-white p-3 focus:ring-2 focus:ring-brand-500 outline-none font-bold"
+                      value={selectedUser}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedUser(e.target.value)}
+                    >
+                      <option value={user?.id}>Assign to myself</option>
+                      {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    </select>
+                  </div>
+                ) : (
+                  <div className="md:col-span-2">
+                    <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-1">Target Personnel</label>
+                    <div className="w-full rounded-xl border border-slate-700 bg-slate-800 text-slate-300 p-3 font-bold">
+                      {user?.name} (Myself)
+                    </div>
+                  </div>
+                )}
 
                 {offices.length > 0 && (
                   <div className="md:col-span-2">
@@ -496,7 +551,7 @@ export const Agenda: React.FC = () => {
                 onClick={() => setSelectedShiftDetail(schedule)}
                 className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 relative group hover:shadow-md transition-all border-b-4 border-b-brand-100 cursor-pointer"
               >
-                {isAdmin && (
+                {(isAdmin || schedule.userId === user?.id) && (
                   <div className="absolute top-4 right-4 flex gap-2" onClick={(e) => e.stopPropagation()}>
                     {editingScheduleId !== schedule.id && (
                       <button 
@@ -550,6 +605,23 @@ export const Agenda: React.FC = () => {
                           onChange={(e) => setEditNotesValue(e.target.value)}
                           placeholder="Updated instructions..."
                         />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-black text-brand-600 uppercase tracking-widest">Service Days</label>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                           {DAYS.map((day, idx) => (
+                             <button
+                               key={idx}
+                               type="button"
+                               onClick={() => toggleEditScheduleDay(idx)}
+                               className={`flex items-center space-x-1 px-2 py-1 rounded-lg border text-[8px] font-black transition-all ${editDaysValue.includes(idx) ? 'bg-brand-600 border-brand-600 text-white' : 'bg-white border-brand-200 text-brand-600 hover:bg-brand-50'}`}
+                             >
+                               {editDaysValue.includes(idx) ? <CheckSquare size={10} /> : <Square size={10} />}
+                               <span>{day.substring(0, 3).toUpperCase()}</span>
+                             </button>
+                           ))}
+                        </div>
                       </div>
 
                       <div className="flex gap-2">

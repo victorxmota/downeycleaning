@@ -12,17 +12,19 @@ export interface User {
   pps: string;
   phone: string;
   password?: string;
+  fcmToken?: string;
+  fcmTokens?: string[];
 }
 
 export interface AppNotification {
   id: string;
   senderId: string;
   senderName: string;
-  recipientId: string; // 'all' para todos ou ID do usuário específico
+  recipientId: string; // 'all' for everyone or specific user ID
   title: string;
   message: string;
   createdAt: string;
-  readBy: string[]; // Lista de IDs de usuários que leram
+  readBy: string[]; // List of user IDs who have read the notification
 }
 
 export interface ScheduleItem {

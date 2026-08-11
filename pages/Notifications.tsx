@@ -23,9 +23,12 @@ import {
   Filter,
   RefreshCw,
   AlertCircle,
-  AlertTriangle
+  AlertTriangle,
+  Smartphone,
+  CheckCircle
 } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
+import { requestFCMToken } from '../services/fcm';
 
 export const Notifications: React.FC = () => {
   const { user } = useAuth();
@@ -51,6 +54,32 @@ export const Notifications: React.FC = () => {
     title: '',
     message: ''
   });
+
+  // FCM Push Notifications State
+  const [fcmStatus, setFcmStatus] = useState<NotificationPermission>(
+    typeof window !== 'undefined' && 'Notification' in window ? Notification.permission : 'default'
+  );
+  const [isEnablingFcm, setIsEnablingFcm] = useState(false);
+
+  const handleEnableFcm = async () => {
+    setIsEnablingFcm(true);
+    try {
+      const { permission, token } = await requestFCMToken();
+      setFcmStatus(permission);
+      if (token && user?.id) {
+        await Database.saveUserFcmToken(user.id, token);
+        alert('Mobile push notifications (FCM) enabled successfully on this device!');
+      } else if (permission === 'denied') {
+        alert('Notification permission blocked by browser. Please allow notifications in your browser settings.');
+      } else if (permission === 'granted') {
+        alert('Notifications enabled successfully!');
+      }
+    } catch (err) {
+      console.error("Error enabling FCM:", err);
+    } finally {
+      setIsEnablingFcm(false);
+    }
+  };
 
   const isAdmin = user?.role === UserRole.ADMIN;
 
@@ -234,6 +263,49 @@ export const Notifications: React.FC = () => {
         )}
       </header>
 
+      {/* FCM Push Notification Banner */}
+      <div className="bg-gradient-to-r from-brand-900 via-brand-800 to-brand-900 text-white p-4.5 rounded-2xl shadow-lg flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border border-brand-700">
+        <div className="flex items-center gap-3">
+          <div className="p-2.5 bg-white/10 rounded-xl backdrop-blur-md shrink-0">
+            <Smartphone className="text-brand-300" size={24} />
+          </div>
+          <div>
+            <h3 className="font-bold text-sm tracking-wide flex items-center gap-2">
+              Mobile / Device Push Notifications (FCM)
+              {fcmStatus === 'granted' && (
+                <span className="bg-green-500/20 text-green-300 border border-green-500/40 text-[10px] px-2 py-0.5 rounded-full flex items-center gap-1 font-semibold">
+                  <CheckCircle size={12} /> Active
+                </span>
+              )}
+            </h3>
+            <p className="text-xs text-brand-200 mt-0.5">
+              Receive instant push notifications on your mobile device for automatic system alerts and admin messages.
+            </p>
+          </div>
+        </div>
+
+        <Button
+          type="button"
+          onClick={handleEnableFcm}
+          disabled={isEnablingFcm}
+          className={`shrink-0 text-xs font-bold px-4 py-2.5 rounded-xl transition-all shadow-md ${
+            fcmStatus === 'granted'
+              ? 'bg-white/10 text-white border border-white/20 hover:bg-white/20'
+              : 'bg-brand-500 hover:bg-brand-400 text-white border-none animate-pulse'
+          }`}
+        >
+          {isEnablingFcm ? (
+            <>
+              <Loader2 size={14} className="animate-spin mr-2" /> Enabling FCM...
+            </>
+          ) : fcmStatus === 'granted' ? (
+            'Renew FCM Token'
+          ) : (
+            'Enable Mobile FCM'
+          )}
+        </Button>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Composition Panel (Admin Only) */}
         {isAdmin && (
@@ -364,6 +436,9 @@ export const Notifications: React.FC = () => {
               const isMySent = notif.senderId === user?.id;
               const isUnread = !isRead && activeTab === 'received';
               
+              const displayTitle = notif.title;
+              const displayMessage = notif.message;
+              
               return (
                 <div 
                   key={notif.id} 
@@ -408,11 +483,11 @@ export const Notifications: React.FC = () => {
                     
                     <div className="flex-1 min-w-0 pr-10">
                       <h4 className={`font-black text-lg tracking-tight mb-1 ${isUnread ? 'text-brand-900' : 'text-gray-700'}`}>
-                        {notif.title}
+                        {displayTitle}
                       </h4>
                       
                       <p className={`text-sm leading-relaxed mb-4 whitespace-pre-wrap ${isUnread ? 'text-brand-800 font-bold' : 'text-gray-500 font-medium'}`}>
-                        {notif.message}
+                        {displayMessage}
                       </p>
                       
                       <div className="flex flex-wrap items-center gap-4 border-t border-gray-50 pt-4">
