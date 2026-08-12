@@ -86,32 +86,48 @@ export const initForegroundFCMListener = async (onMessageReceived: (payload: any
     const title = payload.notification?.title || payload.data?.title || "New Notification";
     const body = payload.notification?.body || payload.data?.message || "";
 
-    // Trigger local push notification banner if allowed
-    if ("Notification" in window && Notification.permission === "granted") {
-      try {
-        new Notification(title, {
-          body,
-          icon: "/assets/downey-logo.png"
-        });
-      } catch (e) {
-        console.warn("Could not spawn native notification", e);
-      }
-    }
+    // Trigger device push notification
+    sendDevicePushNotification(title, body, payload.data);
 
     onMessageReceived(payload);
   });
 };
 
-export const sendDevicePushNotification = (title: string, message: string) => {
-  if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+export const sendDevicePushNotification = async (title: string, message: string, extraData?: any) => {
+  if (typeof window === "undefined" || !("Notification" in window) || Notification.permission !== "granted") {
+    return;
+  }
+
+  // First priority: ServiceWorker registration showNotification (Required for mobile background & lockscreen)
+  if ("serviceWorker" in navigator) {
     try {
-      new Notification(title, {
-        body: message,
-        icon: "/assets/downey-logo.png",
-        badge: "/assets/downey-logo.png"
-      });
-    } catch (e) {
-      console.warn("Native Notification trigger fallback:", e);
+      const registration = await navigator.serviceWorker.ready;
+      if (registration && registration.showNotification) {
+        await registration.showNotification(title, {
+          body: message,
+          icon: "/assets/downey-logo.png",
+          badge: "/assets/downey-logo.png",
+          vibrate: [300, 100, 300, 100, 300],
+          tag: "downey-push-" + Date.now(),
+          renotify: true,
+          requireInteraction: true,
+          data: extraData || {}
+        } as any);
+        return;
+      }
+    } catch (swErr) {
+      console.warn("ServiceWorker showNotification failed, trying DOM fallback:", swErr);
     }
+  }
+
+  // Fallback: DOM Notification API
+  try {
+    new Notification(title, {
+      body: message,
+      icon: "/assets/downey-logo.png",
+      badge: "/assets/downey-logo.png"
+    });
+  } catch (e) {
+    console.warn("Native Notification trigger fallback:", e);
   }
 };

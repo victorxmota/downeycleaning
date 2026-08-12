@@ -1,7 +1,7 @@
 {
   "projects": {
     "DowneyDowneyVersionTest": "downeycleaning-17056",
-    "default": "downeycleaning-17056",
+    "default": "downey-cleaning",
     "DowneyCleaningVersionTest": "downey-cleaning"
   },
   "targets": {},

@@ -143,133 +143,177 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
     if (!startLat || !startLng) return;
 
     let watchId: number | null = null;
+    let intervalId: any = null;
+    let wakeLockSentinel: any = null;
+
+    // Request Screen Wake Lock to prevent deep sleep on active shifts
+    const requestWakeLock = async () => {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLockSentinel = await (navigator as any).wakeLock.request('screen');
+        } catch (err) {
+          console.warn('Wake Lock request failed:', err);
+        }
+      }
+    };
+    requestWakeLock();
+
+    const checkPosition = async (position: GeolocationPosition) => {
+      if (isAutoCheckingOutRef.current) return;
+
+      const currentLat = position.coords.latitude;
+      const currentLng = position.coords.longitude;
+
+      const distance = getDistanceInMeters(startLat, startLng, currentLat, currentLng);
+
+      if (distance > 1000) {
+        // 1. Automatic Checkout (> 1 km / 1000 meters)
+        isAutoCheckingOutRef.current = true;
+        try {
+          const sessionId = activeSession.id;
+          const sessionLocation = activeSession.locationName;
+          const existingNotes = activeSession.notes ? activeSession.notes + '\n' : '';
+          const autoCheckoutNote = `${existingNotes}[Automatic checkout triggered: Distance > 1 km (${distance.toFixed(0)}m)]`;
+
+          // End shift in database
+          await Database.endShift(sessionId, {
+            endTime: new Date().toISOString(),
+            endLocation: { lat: currentLat, lng: currentLng },
+            isPaused: false,
+            notes: autoCheckoutNote
+          });
+
+          // Clean up alert flags and update state IMMEDIATELY
+          const alertKey500 = `downey_shift_alert_500m_sent_${sessionId}`;
+          localStorage.removeItem(alertKey500);
+
+          setActiveSession(null);
+          setShowGeofenceModal(false);
+          window.dispatchEvent(new CustomEvent('downey:shift-changed'));
+
+          // Send notifications asynchronously without blocking checkout completion
+          try {
+            // Notification for employee
+            await Database.sendNotification({
+              senderId: 'system',
+              senderName: 'Location Tracker',
+              recipientId: user.id,
+              title: '🚨 Automatic Checkout Completed',
+              message: `Attention: Your shift at "${sessionLocation}" was automatically checked out because you moved ${distance.toFixed(0)}m (${(distance / 1000).toFixed(2)} km) away from the check-in point (exceeded 1 km maximum radius).`,
+              createdAt: new Date().toISOString(),
+              readBy: []
+            });
+
+            // Notification for admins
+            const allUsers = await Database.getAllUsers();
+            const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
+
+            for (const admin of admins) {
+              await Database.sendNotification({
+                senderId: 'system',
+                senderName: 'Location Tracker',
+                recipientId: admin.id,
+                title: `🚨 Automatic Checkout: ${user.name} (> 1 km)`,
+                message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) had an AUTOMATIC CHECKOUT triggered after moving more than 1 km away from their shift location.\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${sessionLocation}\n- Recorded Distance: ${distance.toFixed(0)} meters (${(distance / 1000).toFixed(2)} km)\n- Automatic Checkout Time: ${new Date().toLocaleTimeString('en-US')}`,
+                createdAt: new Date().toISOString(),
+                readBy: []
+              });
+            }
+          } catch (notifErr) {
+            console.error("Error sending auto-checkout notifications:", notifErr);
+          }
+        } catch (err) {
+          console.error("Error during automatic checkout:", err);
+          isAutoCheckingOutRef.current = false;
+        }
+      } else if (distance > 500) {
+        // 2. Single Warning Notification when exceeding 500m (no recurring notifications)
+        const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
+        const alertSent = localStorage.getItem(alertKey500);
+
+        if (!alertSent) {
+          localStorage.setItem(alertKey500, 'true');
+
+          try {
+            // Single notification to employee
+            await Database.sendNotification({
+              senderId: 'system',
+              senderName: 'Location Tracker',
+              recipientId: user.id,
+              title: '🚨 Geofence Distance Warning (500m)',
+              message: `Attention: You have moved ${distance.toFixed(0)}m away from the starting point of your shift "${activeSession.locationName}". Please remain within the 500m safety radius. Exceeding 1 km will trigger an automatic checkout.`,
+              createdAt: new Date().toISOString(),
+              readBy: []
+            });
+
+            // Single notification to administrators
+            const allUsers = await Database.getAllUsers();
+            const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
+
+            for (const admin of admins) {
+              await Database.sendNotification({
+                senderId: 'system',
+                senderName: 'Location Tracker',
+                recipientId: admin.id,
+                title: `🚨 Alert: Employee Out of Bounds (${user.name})`,
+                message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) has moved ${distance.toFixed(0)}m away from the authorized work location for their shift (exceeded 500m radius).\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${activeSession.locationName}\n- Recorded Distance: ${distance.toFixed(0)} meters (Radius limit: 500m, Auto-checkout: 1km)\n- Record Time: ${new Date().toLocaleTimeString('en-US')}`,
+                createdAt: new Date().toISOString(),
+                readBy: []
+              });
+            }
+          } catch (err) {
+            console.error("Error dispatching 500m proximity notifications:", err);
+          }
+        }
+      } else {
+        // 3. Reset lock when employee returns within 500 meters
+        const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
+        localStorage.removeItem(alertKey500);
+        setShowGeofenceModal(false);
+      }
+    };
+
+    const fetchCurrentLocation = () => {
+      if (navigator.geolocation && !isAutoCheckingOutRef.current) {
+        navigator.geolocation.getCurrentPosition(
+          checkPosition,
+          (err) => console.warn('Interval GPS fix error:', err),
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+        );
+      }
+    };
 
     if (navigator.geolocation) {
+      // Primary real-time watch
       watchId = navigator.geolocation.watchPosition(
-        async (position) => {
-          if (isAutoCheckingOutRef.current) return;
-
-          const currentLat = position.coords.latitude;
-          const currentLng = position.coords.longitude;
-
-          const distance = getDistanceInMeters(startLat, startLng, currentLat, currentLng);
-
-          if (distance > 1000) {
-            // 1. Automatic Checkout (> 1 km / 1000 meters)
-            isAutoCheckingOutRef.current = true;
-            try {
-              const sessionId = activeSession.id;
-              const sessionLocation = activeSession.locationName;
-              const existingNotes = activeSession.notes ? activeSession.notes + '\n' : '';
-              const autoCheckoutNote = `${existingNotes}[Automatic checkout triggered: Distance > 1 km (${distance.toFixed(0)}m)]`;
-
-              // End shift in database
-              await Database.endShift(sessionId, {
-                endTime: new Date().toISOString(),
-                endLocation: { lat: currentLat, lng: currentLng },
-                isPaused: false,
-                notes: autoCheckoutNote
-              });
-
-              // Clean up alert flags and update state IMMEDIATELY
-              const alertKey500 = `downey_shift_alert_500m_sent_${sessionId}`;
-              localStorage.removeItem(alertKey500);
-
-              setActiveSession(null);
-              setShowGeofenceModal(false);
-              window.dispatchEvent(new CustomEvent('downey:shift-changed'));
-
-              // Send notifications asynchronously without blocking checkout completion
-              try {
-                // Notification for employee
-                await Database.sendNotification({
-                  senderId: 'system',
-                  senderName: 'Location Tracker',
-                  recipientId: user.id,
-                  title: '🚨 Automatic Checkout Completed',
-                  message: `Attention: Your shift at "${sessionLocation}" was automatically checked out because you moved ${distance.toFixed(0)}m (${(distance / 1000).toFixed(2)} km) away from the check-in point (exceeded 1 km maximum radius).`,
-                  createdAt: new Date().toISOString(),
-                  readBy: []
-                });
-
-                // Notification for admins
-                const allUsers = await Database.getAllUsers();
-                const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
-
-                for (const admin of admins) {
-                  await Database.sendNotification({
-                    senderId: 'system',
-                    senderName: 'Location Tracker',
-                    recipientId: admin.id,
-                    title: `🚨 Automatic Checkout: ${user.name} (> 1 km)`,
-                    message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) had an AUTOMATIC CHECKOUT triggered after moving more than 1 km away from their shift location.\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${sessionLocation}\n- Recorded Distance: ${distance.toFixed(0)} meters (${(distance / 1000).toFixed(2)} km)\n- Automatic Checkout Time: ${new Date().toLocaleTimeString('en-US')}`,
-                    createdAt: new Date().toISOString(),
-                    readBy: []
-                  });
-                }
-              } catch (notifErr) {
-                console.error("Error sending auto-checkout notifications:", notifErr);
-              }
-            } catch (err) {
-              console.error("Error during automatic checkout:", err);
-              isAutoCheckingOutRef.current = false;
-            }
-          } else if (distance > 500) {
-            // 2. Single Warning Notification when exceeding 500m (no recurring notifications)
-            const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
-            const alertSent = localStorage.getItem(alertKey500);
-
-            if (!alertSent) {
-              localStorage.setItem(alertKey500, 'true');
-
-              try {
-                // Single notification to employee
-                await Database.sendNotification({
-                  senderId: 'system',
-                  senderName: 'Location Tracker',
-                  recipientId: user.id,
-                  title: '🚨 Geofence Distance Warning (500m)',
-                  message: `Attention: You have moved ${distance.toFixed(0)}m away from the starting point of your shift "${activeSession.locationName}". Please remain within the 500m safety radius. Exceeding 1 km will trigger an automatic checkout.`,
-                  createdAt: new Date().toISOString(),
-                  readBy: []
-                });
-
-                // Single notification to administrators
-                const allUsers = await Database.getAllUsers();
-                const admins = allUsers.filter(u => u.role === UserRole.ADMIN);
-
-                for (const admin of admins) {
-                  await Database.sendNotification({
-                    senderId: 'system',
-                    senderName: 'Location Tracker',
-                    recipientId: admin.id,
-                    title: `🚨 Alert: Employee Out of Bounds (${user.name})`,
-                    message: `ADMINISTRATIVE GEOLOCATION ALERT:\nEmployee ${user.name} (${user.email}) has moved ${distance.toFixed(0)}m away from the authorized work location for their shift (exceeded 500m radius).\n\nRecord Details:\n- Employee: ${user.name}\n- Email: ${user.email}\n- Shift Location: ${activeSession.locationName}\n- Recorded Distance: ${distance.toFixed(0)} meters (Radius limit: 500m, Auto-checkout: 1km)\n- Record Time: ${new Date().toLocaleTimeString('en-US')}`,
-                    createdAt: new Date().toISOString(),
-                    readBy: []
-                  });
-                }
-              } catch (err) {
-                console.error("Error dispatching 500m proximity notifications:", err);
-              }
-            }
-          } else {
-            // 3. Reset lock when employee returns within 500 meters
-            const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
-            localStorage.removeItem(alertKey500);
-            setShowGeofenceModal(false);
-          }
-        },
-        (error) => {
-          console.error("Error watching geolocation in Layout:", error);
-        },
+        checkPosition,
+        (error) => console.error("Error watching geolocation in Layout:", error),
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
+
+      // Active polling every 10 seconds to maintain fix in background / screen lock
+      intervalId = setInterval(fetchCurrentLocation, 10000);
     }
+
+    // Immediately evaluate position whenever device unlocks or tab visibility changes
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        requestWakeLock();
+        fetchCurrentLocation();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
+      }
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      if (wakeLockSentinel) {
+        wakeLockSentinel.release().catch(() => {});
       }
     };
   }, [activeSession, user]);

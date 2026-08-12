@@ -22,10 +22,40 @@ messaging.onBackgroundMessage((payload) => {
     body: payload.notification?.body || payload.data?.message || '',
     icon: '/assets/downey-logo.png',
     badge: '/assets/downey-logo.png',
-    data: payload.data
+    vibrate: [300, 100, 300, 100, 300],
+    tag: payload.data?.id || 'downey-fcm-alert-' + Date.now(),
+    renotify: true,
+    requireInteraction: true,
+    data: payload.data || {}
   };
 
   self.registration.showNotification(notificationTitle, notificationOptions);
+});
+
+// Standard Push Event fallback for custom Web Push / FCM payloads
+self.addEventListener('push', function(event) {
+  if (event.data) {
+    try {
+      const data = event.data.json();
+      const title = data.notification?.title || data.data?.title || data.title || 'Downey Cleaning Notification';
+      const body = data.notification?.body || data.data?.message || data.message || '';
+      
+      const options = {
+        body,
+        icon: '/assets/downey-logo.png',
+        badge: '/assets/downey-logo.png',
+        vibrate: [300, 100, 300, 100, 300],
+        tag: 'downey-push-' + Date.now(),
+        renotify: true,
+        requireInteraction: true,
+        data: data.data || data
+      };
+
+      event.waitUntil(self.registration.showNotification(title, options));
+    } catch (e) {
+      console.warn('[firebase-messaging-sw.js] Push event parsing error:', e);
+    }
+  }
 });
 
 self.addEventListener('notificationclick', function(event) {
@@ -41,7 +71,8 @@ self.addEventListener('notificationclick', function(event) {
         }
         return client.focus();
       }
-      return clients.openWindow('/');
+      return clients.openWindow('/notifications');
     })
   );
 });
+
