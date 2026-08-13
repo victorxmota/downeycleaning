@@ -101,6 +101,15 @@ export const sendDevicePushNotification = async (title: string, message: string,
   // First priority: ServiceWorker registration showNotification (Required for mobile background & lockscreen)
   if ("serviceWorker" in navigator) {
     try {
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.controller.postMessage({
+          type: 'GEOFENCE_ALERT',
+          title,
+          message,
+          extraData
+        });
+      }
+
       const registration = await navigator.serviceWorker.ready;
       if (registration && registration.showNotification) {
         await registration.showNotification(title, {

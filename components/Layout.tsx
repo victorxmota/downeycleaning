@@ -6,6 +6,7 @@ import { UserRole, TimeRecord } from '../types';
 import { useAuth } from '../App';
 import { Database } from '../services/database';
 import { registerFCMServiceWorker, requestFCMToken, initForegroundFCMListener } from '../services/fcm';
+import { startBackgroundKeepAlive, stopBackgroundKeepAlive } from '../services/backgroundLocation';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -283,6 +284,11 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
       }
     };
 
+    // Start background audio keep-alive and dedicated Web Worker off-thread timer
+    startBackgroundKeepAlive(() => {
+      fetchCurrentLocation();
+    });
+
     if (navigator.geolocation) {
       // Primary real-time watch
       watchId = navigator.geolocation.watchPosition(
@@ -291,20 +297,21 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
       );
 
-      // Active polling every 10 seconds to maintain fix in background / screen lock
-      intervalId = setInterval(fetchCurrentLocation, 10000);
+      // Active polling every 5 seconds to maintain fix in background / screen lock
+      intervalId = setInterval(fetchCurrentLocation, 5000);
     }
 
     // Immediately evaluate position whenever device unlocks or tab visibility changes
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         requestWakeLock();
-        fetchCurrentLocation();
       }
+      fetchCurrentLocation();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
     return () => {
+      stopBackgroundKeepAlive();
       if (watchId !== null) {
         navigator.geolocation.clearWatch(watchId);
       }

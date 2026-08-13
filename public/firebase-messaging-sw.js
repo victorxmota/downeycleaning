@@ -58,6 +58,28 @@ self.addEventListener('push', function(event) {
   }
 });
 
+// Message Event for Direct Trigger from Web App Thread
+self.addEventListener('message', function(event) {
+  if (event.data && (event.data.type === 'TRIGGER_PUSH_NOTIFICATION' || event.data.type === 'GEOFENCE_ALERT')) {
+    const title = event.data.title || '🚨 Downey Alert';
+    const message = event.data.message || '';
+    const extraData = event.data.extraData || {};
+
+    const options = {
+      body: message,
+      icon: '/assets/downey-logo.png',
+      badge: '/assets/downey-logo.png',
+      vibrate: [300, 100, 300, 100, 300],
+      tag: 'downey-geofence-' + Date.now(),
+      renotify: true,
+      requireInteraction: true,
+      data: extraData
+    };
+
+    self.registration.showNotification(title, options);
+  }
+});
+
 self.addEventListener('notificationclick', function(event) {
   event.notification.close();
   event.waitUntil(
