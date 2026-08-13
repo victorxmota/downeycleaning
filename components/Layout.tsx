@@ -227,7 +227,7 @@ export const Layout: React.FC<LayoutProps> = ({ children }) => {
           console.error("Error during automatic checkout:", err);
           isAutoCheckingOutRef.current = false;
         }
-      } else if (distance > 500) {
+      } else if (distance > 5) {
         // 2. Single Warning Notification when exceeding 500m (no recurring notifications)
         const alertKey500 = `downey_shift_alert_500m_sent_${activeSession.id}`;
         const alertSent = localStorage.getItem(alertKey500);
